@@ -15,6 +15,11 @@ A simple, efficient, and modular HTTP/HTTPS server implemented in Delphi. This p
   - Protection against common attack vectors
 - **Logging System**: Comprehensive logging with customizable output
 - **Cross-Platform**: Compatible with both Windows and Linux
+- **To support HTTPS, the OpenSSL-3.5.0_win32 library is required, including
+  - openssl.exe
+  - libssl-3.dll
+  - libcrypto-3.dll
+  - legacy.dll
 
 ## Getting Started
 
