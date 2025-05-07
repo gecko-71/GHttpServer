@@ -1,0 +1,72 @@
+﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <ProjectGuid>{0477EDFE-5D8A-4E90-AFD7-5FE219273CC8}</ProjectGuid>
+    </PropertyGroup>
+    <ItemGroup>
+        <Projects Include="GHttpSvrPrj.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="GHttpSvrTestPrj.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="SSLCertGenerator.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="GHttpsSvrPrj.dproj">
+            <Dependencies/>
+        </Projects>
+    </ItemGroup>
+    <ProjectExtensions>
+        <Borland.Personality>Default.Personality.12</Borland.Personality>
+        <Borland.ProjectType/>
+        <BorlandProject>
+            <Default.Personality/>
+        </BorlandProject>
+    </ProjectExtensions>
+    <Target Name="GHttpSvrPrj">
+        <MSBuild Projects="GHttpSvrPrj.dproj"/>
+    </Target>
+    <Target Name="GHttpSvrPrj:Clean">
+        <MSBuild Projects="GHttpSvrPrj.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="GHttpSvrPrj:Make">
+        <MSBuild Projects="GHttpSvrPrj.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="GHttpSvrTestPrj">
+        <MSBuild Projects="GHttpSvrTestPrj.dproj"/>
+    </Target>
+    <Target Name="GHttpSvrTestPrj:Clean">
+        <MSBuild Projects="GHttpSvrTestPrj.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="GHttpSvrTestPrj:Make">
+        <MSBuild Projects="GHttpSvrTestPrj.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="SSLCertGenerator">
+        <MSBuild Projects="SSLCertGenerator.dproj"/>
+    </Target>
+    <Target Name="SSLCertGenerator:Clean">
+        <MSBuild Projects="SSLCertGenerator.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="SSLCertGenerator:Make">
+        <MSBuild Projects="SSLCertGenerator.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="GHttpsSvrPrj">
+        <MSBuild Projects="GHttpsSvrPrj.dproj"/>
+    </Target>
+    <Target Name="GHttpsSvrPrj:Clean">
+        <MSBuild Projects="GHttpsSvrPrj.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="GHttpsSvrPrj:Make">
+        <MSBuild Projects="GHttpsSvrPrj.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Build">
+        <CallTarget Targets="GHttpSvrPrj;GHttpSvrTestPrj;SSLCertGenerator;GHttpsSvrPrj"/>
+    </Target>
+    <Target Name="Clean">
+        <CallTarget Targets="GHttpSvrPrj:Clean;GHttpSvrTestPrj:Clean;SSLCertGenerator:Clean;GHttpsSvrPrj:Clean"/>
+    </Target>
+    <Target Name="Make">
+        <CallTarget Targets="GHttpSvrPrj:Make;GHttpSvrTestPrj:Make;SSLCertGenerator:Make;GHttpsSvrPrj:Make"/>
+    </Target>
+    <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
+</Project>
