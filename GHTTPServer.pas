@@ -996,6 +996,113 @@ var
       Result := False;
     end;
   end;
+
+
+  // Error handling procedures
+  procedure HandleRequestTimeout(const RequestStr: string);
+  begin
+    WriteLog(Format('Task: Timeout for IP %s (%.1f seconds)',
+            [ClientInfo.IP, (Now - ClientInfo.StartTime) * 86400]));
+    GlobalIPMonitor.RegisterFailedAttempt(ClientInfo.IP);
+    SendErrorResponse(408, 'Request Timeout');
+  end;
+
+  procedure HandleIncompletePostData(const RequestStr: string);
+  begin
+    WriteLog(Format('Task: Incomplete POST data from IP %s. Expected: %d, Got: %d',
+            [ClientInfo.IP, ClientInfo.ContentLength, ClientInfo.PostDataReceived]));
+    SendErrorResponse(400, 'Incomplete request body');
+  end;
+
+  procedure HandleSocketError(const RequestStr: string; ErrorCode: Integer);
+  begin
+    WriteLog(Format('Task: Receive failed for IP %s, error %d - %s',
+            [ClientInfo.IP, ErrorCode, SocketErrorToString(ErrorCode)]));
+    GlobalIPMonitor.RegisterFailedAttempt(ClientInfo.IP);
+
+    if (ClientInfo.HeaderEndPos > 0) and RequestStr.StartsWith('POST ') and
+       ClientInfo.HasContentLength and (ClientInfo.PostDataReceived < ClientInfo.ContentLength) then
+    begin
+      WriteLog(Format('Task: Connection error while receiving POST data from IP %s. Expected: %d, Got: %d',
+              [ClientInfo.IP, ClientInfo.ContentLength, ClientInfo.PostDataReceived]));
+      SendErrorResponse(400, 'Incomplete request body');
+    end;
+  end;
+
+  procedure HandleClientClosedConnection(const RequestStr: string);
+  begin
+    WriteLog(Format('Task: Client closed connection from IP %s', [ClientInfo.IP]));
+    ClientInfo.ConnectionClosed := True;
+
+    if (ClientInfo.HeaderEndPos > 0) and RequestStr.StartsWith('POST ') and
+       ClientInfo.HasContentLength and (ClientInfo.PostDataReceived < ClientInfo.ContentLength) then
+    begin
+      WriteLog(Format('Task: Incomplete POST data from IP %s. Expected: %d, Got: %d',
+              [ClientInfo.IP, ClientInfo.ContentLength, ClientInfo.PostDataReceived]));
+      SendErrorResponse(400, 'Incomplete request body');
+    end;
+  end;
+
+  procedure HandleHeaderSizeLimitExceeded(const RequestStr: string);
+  begin
+    WriteLog(Format('Task: Header size limit exceeded for IP %s', [ClientInfo.IP]));
+    GlobalIPMonitor.RegisterFailedAttempt(ClientInfo.IP);
+    SendErrorResponse(431, 'Request Header Fields Too Large');
+  end;
+
+  // Procedure for reading and processing data from a socket
+  function ReadSocketData(var RequestStr: string): Boolean;
+  var
+    Buffer: array[0..BUFFER_SIZE] of Byte;
+    TempBytes: TBytes;
+    BytesReceived, ErrorCode: Integer;
+  begin
+    Result := False;
+
+    // Odczytanie danych z gniazda
+    BytesReceived := recv(ClientSocket, Buffer, SizeOf(Buffer), 0);
+
+    // Reading data from the socket
+    if BytesReceived = SOCKET_ERROR then
+    begin
+      ErrorCode := WSAGetLastError;
+      if ErrorCode = WSAEWOULDBLOCK then
+      begin
+        Sleep(10);
+        Result := True;
+        Exit;
+      end;
+      HandleSocketError(RequestStr, ErrorCode);
+      Exit;
+    end;
+
+    // Handling connection closure
+    if BytesReceived = 0 then
+    begin
+      HandleClientClosedConnection(RequestStr);
+      if ClientInfo.ConnectionClosed then
+        Exit;
+      Result := False;
+      Exit;
+    end;
+
+    // Updating the received byte counter
+    ClientInfo.TotalBytesReceived := ClientInfo.TotalBytesReceived + BytesReceived;
+
+    // Adding the received data to the Request
+    SetLength(TempBytes, BytesReceived);
+    Move(Buffer[0], TempBytes[0], BytesReceived);
+    Request := AppendBytes(Request, TempBytes);
+
+
+    RequestStr := TEncoding.ASCII.GetString(Request);
+
+    // Resetting the TimeOut counter
+    ClientInfo.StartTime := Now;
+
+    Result := True;
+  end;
+
   function ReceiveHttpRequest: Boolean;
   var
     Buffer: array[0..BUFFER_SIZE] of Byte;
@@ -1015,18 +1122,13 @@ var
     ClientInfo.HeaderEndPos := 0;
     ConsecutiveEmptyReads := 0;
     RequestStr := '';
-
     while True do
     begin
       if (Now - ClientInfo.StartTime) > ClientInfo.TimeoutValue then
       begin
-        WriteLog(Format('Task: Timeout for IP %s (%.1f seconds)',
-                [ClientInfo.IP, (Now - ClientInfo.StartTime) * 86400]));
-        GlobalIPMonitor.RegisterFailedAttempt(ClientInfo.IP);
-        SendErrorResponse(408, 'Request Timeout');
+        HandleRequestTimeout(RequestStr);
         Exit;
       end;
-
       if not WaitForSocketReady(ClientSocket, True, 100) then
       begin
         Inc(ConsecutiveEmptyReads);
@@ -1035,18 +1137,16 @@ var
           if RequestStr.StartsWith('POST ') and ClientInfo.HasContentLength and
              (ClientInfo.PostDataReceived < ClientInfo.ContentLength) then
           begin
-            WriteLog(Format('Task: Incomplete POST data from IP %s. Expected: %d, Got: %d',
-                    [ClientInfo.IP, ClientInfo.ContentLength, ClientInfo.PostDataReceived]));
-            SendErrorResponse(400, 'Incomplete request body');
+            HandleIncompletePostData(RequestStr);
             Exit;
           end;
         end;
         Continue;
       end;
-
       ConsecutiveEmptyReads := 0;
+      /////////////////////////////////////////////////////////////////
       BytesReceived := recv(ClientSocket, Buffer, SizeOf(Buffer), 0);
-
+      /////////////////////////////////////////////////////////////////
       if BytesReceived = SOCKET_ERROR then
       begin
         ErrorCode := WSAGetLastError;
@@ -1055,36 +1155,14 @@ var
           Sleep(10);
           Continue;
         end;
-
-        WriteLog(Format('Task: Receive failed for IP %s, error %d - %s',
-                [ClientInfo.IP, ErrorCode, SocketErrorToString(ErrorCode)]));
-        GlobalIPMonitor.RegisterFailedAttempt(ClientInfo.IP);
-
-        if (ClientInfo.HeaderEndPos > 0) and RequestStr.StartsWith('POST ') and
-           ClientInfo.HasContentLength and (ClientInfo.PostDataReceived < ClientInfo.ContentLength) then
-        begin
-          WriteLog(Format('Task: Connection error while receiving POST data from IP %s. Expected: %d, Got: %d',
-                  [ClientInfo.IP, ClientInfo.ContentLength, ClientInfo.PostDataReceived]));
-          SendErrorResponse(400, 'Incomplete request body');
-        end;
-
+        HandleSocketError(RequestStr, ErrorCode);
         Exit;
       end;
-
       if BytesReceived = 0 then
       begin
-        WriteLog(Format('Task: Client closed connection from IP %s', [ClientInfo.IP]));
-        ClientInfo.ConnectionClosed := True;
-
-        if (ClientInfo.HeaderEndPos > 0) and RequestStr.StartsWith('POST ') and
-           ClientInfo.HasContentLength and (ClientInfo.PostDataReceived < ClientInfo.ContentLength) then
-        begin
-          WriteLog(Format('Task: Incomplete POST data from IP %s. Expected: %d, Got: %d',
-                  [ClientInfo.IP, ClientInfo.ContentLength, ClientInfo.PostDataReceived]));
-          SendErrorResponse(400, 'Incomplete request body');
+        HandleClientClosedConnection(RequestStr);
+        if ClientInfo.ConnectionClosed then
           Exit;
-        end;
-
         Break;
       end;
 
@@ -1108,7 +1186,6 @@ var
             RequestHeaders.Text := HeadersText;
             ClientInfo.HasContentLength := False;
             ClientInfo.ContentLengthValid := True;
-
             for i := 0 to RequestHeaders.Count - 1 do
             begin
               Line := RequestHeaders[i];
@@ -1120,12 +1197,10 @@ var
           end;
         end;
       end;
-
       // Process complete request
       if ClientInfo.HeaderEndPos > 0 then
       begin
         ClientInfo.PostDataReceived := Length(RequestStr) - ClientInfo.HeaderEndPos - 3;
-
         if RequestStr.StartsWith('POST ') then
         begin
           if ClientInfo.HasContentLength and ClientInfo.ContentLengthValid then
@@ -1134,10 +1209,8 @@ var
             begin
               WriteLog(Format('Task: Complete POST request received for IP %s (%d bytes)',
                       [ClientInfo.IP, ClientInfo.TotalBytesReceived]));
-
               if not ValidateUserAgent(RequestStr) then
                 Exit;
-
               Result := True;
               Break;
             end;
@@ -1147,20 +1220,18 @@ var
         begin
           if not ValidateUserAgent(RequestStr) then
             Exit;
-
           Result := True;
           Break;
         end;
       end
       else if ClientInfo.TotalBytesReceived > FMaxHeaderSize then
       begin
-        WriteLog(Format('Task: Header size limit exceeded for IP %s', [ClientInfo.IP]));
-        GlobalIPMonitor.RegisterFailedAttempt(ClientInfo.IP);
-        SendErrorResponse(431, 'Request Header Fields Too Large');
+        HandleHeaderSizeLimitExceeded(RequestStr);
         Exit;
       end;
     end;
   end;
+
   function GenerateResponse: Boolean;
   var
     TextResponseBytes: TBytes;
