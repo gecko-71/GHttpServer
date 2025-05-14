@@ -52,7 +52,7 @@ begin
     begin
       WriteLn(LogLine);
     end;
-    
+
     // Create server instance on port 3042 with max 200 connections
     Server := TGHTTPServer.Create(nil, 3042, 200, HttpLogger);
     try
@@ -65,8 +65,8 @@ begin
           AResponseBuilder.SetStatus(200);
           AResponseBuilder.AddTextContent('content', 'text/html; charset=utf-8',
             '<html><body><h1>Welcome to GHTTP Server</h1></body></html>');
-        end);
-        
+        end,atNone, []);
+
       // Start the server
       Server.Start;
     finally
