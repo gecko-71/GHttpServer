@@ -26,7 +26,7 @@ A simple, efficient, and modular HTTP/HTTPS server implemented in Delphi. This p
 ### Prerequisites
 
 - Delphi IDE (tested with Delphi 10.4 and above)
-- Basic understanding of HTTP protocols
+- Basic understanding of HTTP/HTTPS protocols
 
 ### Installation
 
