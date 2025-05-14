@@ -1,6 +1,6 @@
-# GHttpServer - Lightweight HTTP/HTTPS Server
+# GHttpServer - Lightweight HTTP/HTTPS Server and Rest API
 
-A simple, efficient, and modular HTTP/HTTPS server implemented in Delphi. This project provides an easy-to-use platform for handling web requests with minimal configuration.
+A simple, efficient HTTP/HTTPS server implemented in Delphi with JWT authentication support.
 
 ## Features
 
@@ -9,6 +9,7 @@ A simple, efficient, and modular HTTP/HTTPS server implemented in Delphi. This p
 - **Custom Endpoints**: Easy definition of custom API endpoints with handler procedures
 - **File Operations**: Upload and download functionality
 - **Form Data**: Processing of URL-encoded and multipart form data
+- **Authentication: JWT token authorization for securing API endpoints
 - **Security Features**: 
   - IP monitoring
   - Request rate limiting
@@ -78,6 +79,70 @@ begin
 end;
 ```
 
+## JWT Authorization
+The server supports JWT token authentication for securing API endpoints.
+## Token Generation
+```pascal
+Server.AddEndpointProc('/api/token', 'POST',
+  procedure(Sender: TObject; ARequestParser: THTTPRequestParser;
+    AResponseBuilder: THTTPResponseBuilder; AServer: TGHTTPServer)
+  var
+    RequestJson: TJSONObject;
+    Username, Password: string;
+    Token: string;
+  begin
+    try
+      RequestJson := TJSONObject.ParseJSONValue(ARequestParser.BodyValue) as TJSONObject;
+      if not Assigned(RequestJson) then
+      begin
+        AResponseBuilder.SetStatus(400);
+        AResponseBuilder.AddTextContent('error', 'application/json', '{"error":"Invalid JSON"}');
+        Exit;
+      end;
+      
+      Username := RequestJson.GetValue<string>('username', '');
+      Password := RequestJson.GetValue<string>('password', '');
+      
+      if (Username = 'admin') and (Password = 'admin') then
+      begin
+        // Create token with roles
+        var Claims := TJSONObject.Create;
+        var Roles := TJSONArray.Create;
+        Roles.Add('admin');
+        Claims.AddPair('roles', Roles);
+        
+        Token := AServer.JWTManager.CreateToken(Username, Claims);
+        AResponseBuilder.SetStatus(200);
+        AResponseBuilder.AddTextContent('response', 'application/json', 
+          Format('{"token":"%s","token_type":"Bearer"}', [Token]));
+        
+        Claims.Free;
+      end
+      else
+      begin
+        AResponseBuilder.SetStatus(401);
+        AResponseBuilder.AddTextContent('error', 'application/json', '{"error":"Invalid credentials"}');
+      end;
+      
+      RequestJson.Free;
+    except
+      AResponseBuilder.SetStatus(500);
+      AResponseBuilder.AddTextContent('error', 'application/json', '{"error":"Server error"}');
+    end;
+  end, atNone, []);
+```
+## Protected Endpoints
+```pascal
+Server.AddEndpointProc('/api/secure', 'GET',
+  procedure(Sender: TObject; ARequestParser: THTTPRequestParser;
+    AResponseBuilder: THTTPResponseBuilder; AServer: TGHTTPServer)
+  begin
+    AResponseBuilder.SetStatus(200);
+    AResponseBuilder.AddTextContent('content', 'application/json',
+      '{"message": "This is a secure endpoint"}');
+  end, atJWT, []);
+```
+ 
 ## Structure
 
 The project consists of the following main components:
