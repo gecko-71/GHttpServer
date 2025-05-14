@@ -5,7 +5,7 @@ A simple, efficient, and modular HTTP/HTTPS server implemented in Delphi. This p
 ## Features
 
 - **Protocol Support**: HTTP and HTTPS
-- **Request Methods**: GET, POST and other standard HTTP methods
+- **Request Methods**: GET, POST
 - **Custom Endpoints**: Easy definition of custom API endpoints with handler procedures
 - **File Operations**: Upload and download functionality
 - **Form Data**: Processing of URL-encoded and multipart form data
