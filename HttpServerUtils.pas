@@ -2,35 +2,27 @@
   HttpServerUtils - Simple HTTP Server Component
   Author: Gecko71
   Copyright: 2025
-
-
   LICENSE:
   ========
   This code is provided for non-commercial use only. The code is provided "as is"
   without warranty of any kind, either expressed or implied, including but not
   limited to the implied warranties of merchantability and fitness for a particular
   purpose.
-
   You are free to:
   - Use this code for personal, educational, or non-commercial purposes
   - Modify, adapt, or build upon this code as needed
   - Share the code with others under the same license terms
-
   You may not:
   - Use this code for commercial purposes without explicit permission
   - Remove this license notice from any copies or derivatives
-
   THE AUTHOR(S) SHALL NOT BE LIABLE FOR ANY DAMAGES ARISING FROM THE USE
   OF THIS SOFTWARE.
-
   By using this code, you acknowledge that you have read and understood
   this license and agree to its terms.
 }
 
 unit HttpServerUtils;
-
 interface
-
 uses
   {$IFDEF MSWINDOWS}
   Windows, WinSock2,
@@ -40,6 +32,8 @@ uses
   {$ENDIF}
   SysUtils, Classes, SyncObjs, DateUtils, Generics.Collections, System.Threading,
   Logger;
+
+
 
 type
   TIPStatistics = class
@@ -51,7 +45,6 @@ type
     BlockedUntil: TDateTime;
     constructor Create(const AIP: string);
   end;
-
   TIPMonitor = class
   private
     FLock: TCriticalSection;
@@ -67,19 +60,10 @@ type
     FIPDict: TObjectDictionary<string, TIPStatistics>;
     constructor Create(AHttpLogger: THttpLogger = nil);
     destructor Destroy; override;
-
-    // Registers new data from a given IP, returns True if data can be processed
     function RegisterRequest(const IP: string): Boolean;
-
-    // Registers failed attempts
     procedure RegisterFailedAttempt(const IP: string);
-
-    // Checks if IP is blocked
     function IsIPBlocked(const IP: string): Boolean;
-
-    // Cleans old entries
     procedure Cleanup;
-
     property MaxRequestsPerMinute: Integer read FMaxRequestsPerMinute write FMaxRequestsPerMinute;
     property MaxFailedAttempts: Integer read FMaxFailedAttempts write FMaxFailedAttempts;
     property BlockTime: Integer read FBlockTime write FBlockTime;
@@ -87,11 +71,75 @@ type
     property Lock: TCriticalSection read FLock;
   end;
 
+  function BytesPos(const Bytes, Pattern: TBytes): Integer;
 
 implementation
 
-{ TIPStatistics }
+uses GHTTPConstants;
 
+function BytesPos(const Bytes, Pattern: TBytes): Integer;
+var
+  LPS: array of Integer;
+  i, j, N, M: Integer;
+begin
+  Result := 0;
+  N := Length(Bytes);
+  M := Length(Pattern);
+
+  if (M = 0) or (N < M) then
+    Exit;
+
+  SetLength(LPS, M);
+  LPS[0] := 0;
+  j := 0;
+
+  i := 1;
+  while i < M do
+  begin
+    if Pattern[i] = Pattern[j] then
+    begin
+      Inc(j);
+      LPS[i] := j;
+      Inc(i);
+    end
+    else
+    begin
+      if j <> 0 then
+        j := LPS[j - 1]
+      else
+      begin
+        LPS[i] := 0;
+        Inc(i);
+      end;
+    end;
+  end;
+
+  i := 0;
+  j := 0;
+  while i < N do
+  begin
+    if Bytes[i] = Pattern[j] then
+    begin
+      Inc(i);
+      Inc(j);
+    end;
+
+    if j = M then
+    begin
+      Result := i - j + 1;
+      Exit;
+    end
+    else if (i < N) and (Bytes[i] <> Pattern[j]) then
+    begin
+      if j <> 0 then
+        j := LPS[j - 1]
+      else
+        Inc(i);
+    end;
+  end;
+end;
+
+{ TIPStatistics }
 constructor TIPStatistics.Create(const AIP: string);
 begin
   inherited Create;
@@ -101,20 +149,17 @@ begin
   FailedAttempts := 0;
   BlockedUntil := 0;
 end;
-
 { TIPMonitor }
-
 constructor TIPMonitor.Create( AHttpLogger: THttpLogger = nil);
 begin
   HttpLogger := AHttpLogger;
   FIPDict := TObjectDictionary<string, TIPStatistics>.Create([doOwnsValues]);
   FLock := TCriticalSection.Create;
-
-  FMaxRequestsPerMinute := 340;  // per minute
-  FMaxFailedAttempts := 5;      // 5 failed attempts before blocking
-  FBlockTime := 0;             // 0 minutes of blocking
-  FCleanupInterval := 3;        // Cleanup every 3 minutes
-  FMaxIPRecords := 10000;       // Maximum 10 thousand IP records
+  FMaxRequestsPerMinute := C_DEFAULT_MAX_REQUESTS;  // per minute
+  FMaxFailedAttempts := C_DEFAULT_MAX_FAILED;      // 5 failed attempts before blocking
+  FBlockTime := C_DEFAULT_BLOCK_TIME;             // 0 minutes of blocking
+  FCleanupInterval := C_DEFAULT_CLEANUP_INTERVAL;        // Cleanup every 3 minutes
+  FMaxIPRecords := C_DEFAULT_MAX_IP_RECORDS;       // Maximum 10 thousand IP records
   FLastCleanupTime := Now;
   // Run cyclical cleanup task
   TTask.Run(procedure
@@ -126,19 +171,16 @@ begin
     end;
   end);
 end;
-
 destructor TIPMonitor.Destroy;
 begin
   FLock.Free;
   FIPDict.Free;
   inherited;
 end;
-
 procedure TIPMonitor.Log(const Msg: string);
 begin
-  HttpLogger.Log(Format('[%s] [TIPMonitor] %s', [DateTimeToStr(Now), Msg]));
+  HttpLogger.Log(Format(C_LOG_PREFIX, [DateTimeToStr(Now), Msg]));
 end;
-
 function TIPMonitor.RegisterRequest(const IP: string): Boolean;
 var
   IPStats: TIPStatistics;
@@ -147,12 +189,10 @@ begin
   Result := False;
   if IP = '' then
   begin
-    Log('RegisterRequest: Empty IP address');
+    Log(C_REGISTER_REQUEST_EMPTY_IP);
     Exit;
   end;
-
   CurrentTime := Now;
-
   FLock.Enter;
   try
     if not FIPDict.TryGetValue(IP, IPStats) then
@@ -160,88 +200,79 @@ begin
       // Checks record limit
       if FIPDict.Count >= FMaxIPRecords then
       begin
-        Log(Format('RegisterRequest: Cannot add IP %s, max records (%d) reached', [IP, FMaxIPRecords]));
+        Log(Format(C_REGISTER_REQUEST_MAX_RECORDS, [IP, FMaxIPRecords]));
         Exit;
       end;
       IPStats := TIPStatistics.Create(IP);
       FIPDict.Add(IP, IPStats);
       Result := True;
-      Log(Format('RegisterRequest: New IP %s added', [IP]));
+      Log(Format(C_REGISTER_REQUEST_NEW_IP, [IP]));
       Exit;
     end;
-
     // Checks if IP is blocked
     if CurrentTime < IPStats.BlockedUntil then
     begin
-      Log(Format('RegisterRequest: IP %s blocked until %s', [IP, DateTimeToStr(IPStats.BlockedUntil)]));
+      Log(Format(C_REGISTER_REQUEST_BLOCKED, [IP, DateTimeToStr(IPStats.BlockedUntil)]));
       Result := False;
       Exit;
     end;
-
     // Reset counter
     if MinutesBetween(CurrentTime, IPStats.LastRequestTime) >= 1 then
     begin
       IPStats.RequestCount := 0;
-      Log(Format('RegisterRequest: Reset request count for IP %s', [IP]));
+      Log(Format(C_REGISTER_REQUEST_RESET_COUNT, [IP]));
     end;
-
     // Increase counter
     Inc(IPStats.RequestCount);
     IPStats.LastRequestTime := CurrentTime;
-
     // Check limit
     if IPStats.RequestCount > FMaxRequestsPerMinute then
     begin
       IPStats.BlockedUntil := CurrentTime + (FBlockTime / 1440);
-      Log(Format('RegisterRequest: IP %s blocked for exceeding %d requests/min', [IP, FMaxRequestsPerMinute]));
+      Log(Format(C_REGISTER_REQUEST_BLOCKED_EXCEEDING, [IP, FMaxRequestsPerMinute]));
       Result := False;
     end
     else
     begin
       Result := True;
-      Log(Format('RegisterRequest: IP %s request count = %d', [IP, IPStats.RequestCount]));
+      Log(Format(C_REGISTER_REQUEST_COUNT, [IP, IPStats.RequestCount]));
     end;
   finally
     FLock.Leave;
   end;
 end;
-
 procedure TIPMonitor.RegisterFailedAttempt(const IP: string);
 var
   IPStats: TIPStatistics;
 begin
   if IP = '' then
   begin
-    Log('RegisterFailedAttempt: Empty IP address');
+    Log(C_REGISTER_FAILED_EMPTY_IP);
     Exit;
   end;
-
   FLock.Enter;
   try
     if not FIPDict.TryGetValue(IP, IPStats) then
     begin
       if FIPDict.Count >= FMaxIPRecords then
       begin
-        Log(Format('RegisterFailedAttempt: Cannot add IP %s, max records (%d) reached', [IP, FMaxIPRecords]));
+        Log(Format(C_REGISTER_FAILED_MAX_RECORDS, [IP, FMaxIPRecords]));
         Exit;
       end;
       IPStats := TIPStatistics.Create(IP);
       FIPDict.Add(IP, IPStats);
     end;
-
     Inc(IPStats.FailedAttempts);
-    Log(Format('RegisterFailedAttempt: IP %s failed attempts = %d', [IP, IPStats.FailedAttempts]));
-
+    Log(Format(C_REGISTER_FAILED_COUNT, [IP, IPStats.FailedAttempts]));
     if IPStats.FailedAttempts >= FMaxFailedAttempts then
     begin
       IPStats.BlockedUntil := Now + (FBlockTime / 1440);
-      Log(Format('RegisterFailedAttempt: IP %s blocked for %d failed attempts', [IP, FMaxFailedAttempts]));
+      Log(Format(C_REGISTER_FAILED_BLOCKED, [IP, FMaxFailedAttempts]));
     end;
   finally
     FLock.Leave;
   end;
 end;
-
 function TIPMonitor.IsIPBlocked(const IP: string): Boolean;
 var
   IPStats: TIPStatistics;
@@ -249,23 +280,21 @@ begin
   Result := False;
   if IP = '' then
   begin
-    Log('IsIPBlocked: Empty IP address');
+    Log(C_IS_IP_BLOCKED_EMPTY);
     Exit;
   end;
-
   FLock.Enter;
   try
     if FIPDict.TryGetValue(IP, IPStats) then
       Result := Now < IPStats.BlockedUntil;
     if Result then
-      Log(Format('IsIPBlocked: IP %s is blocked until %s', [IP, DateTimeToStr(IPStats.BlockedUntil)]))
+      Log(Format(C_IS_IP_BLOCKED_UNTIL, [IP, DateTimeToStr(IPStats.BlockedUntil)]))
     else
-      Log(Format('IsIPBlocked: IP %s is not blocked', [IP]));
+      Log(Format(C_IS_IP_BLOCKED_NOT, [IP]));
   finally
     FLock.Leave;
   end;
 end;
-
 procedure TIPMonitor.Cleanup;
 var
   CurrentTime: TDateTime;
@@ -275,7 +304,6 @@ var
 begin
   CurrentTime := Now;
   FLastCleanupTime := CurrentTime;
-
   KeysToRemove := TList<string>.Create;
   try
     FLock.Enter;
@@ -283,15 +311,14 @@ begin
       for IP in FIPDict.Keys do
       begin
         IPStats := FIPDict[IP];
-        if (MinutesBetween(CurrentTime, IPStats.LastRequestTime) > 30) and
+        if (MinutesBetween(CurrentTime, IPStats.LastRequestTime) > C_DEFAULT_INACTIVE_MINUTES) and
            (CurrentTime > IPStats.BlockedUntil) then
           KeysToRemove.Add(IP);
       end;
-
       for IP in KeysToRemove do
       begin
         FIPDict.Remove(IP);
-        Log(Format('Cleanup: Removed IP %s', [IP]));
+        Log(Format(C_CLEANUP_REMOVED_IP, [IP]));
       end;
     finally
       FLock.Leave;
@@ -299,8 +326,7 @@ begin
   finally
     KeysToRemove.Free;
   end;
-
-  Log(Format('Cleanup: Removed %d records, current count = %d', [KeysToRemove.Count, FIPDict.Count]));
+  Log(Format(C_CLEANUP_SUMMARY, [KeysToRemove.Count, FIPDict.Count]));
 end;
 
 end.

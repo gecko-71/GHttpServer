@@ -1,32 +1,4 @@
-{
-  OpenSSLWrapper - Simple HTTP Server Component
-  Author: Gecko71
-  Copyright: 2025
-
-  LICENSE:
-  ========
-  This code is provided for non-commercial use only. The code is provided "as is"
-  without warranty of any kind, either expressed or implied, including but not
-  limited to the implied warranties of merchantability and fitness for a particular
-  purpose.
-
-  You are free to:
-  - Use this code for personal, educational, or non-commercial purposes
-  - Modify, adapt, or build upon this code as needed
-  - Share the code with others under the same license terms
-
-  You may not:
-  - Use this code for commercial purposes without explicit permission
-  - Remove this license notice from any copies or derivatives
-
-  THE AUTHOR(S) SHALL NOT BE LIABLE FOR ANY DAMAGES ARISING FROM THE USE
-  OF THIS SOFTWARE.
-
-  By using this code, you acknowledge that you have read and understood
-  this license and agree to its terms.
-}
-
-unit OpenSSLWrapper;
+﻿unit OpenSSLWrapper;
 
 interface
 
@@ -37,39 +9,20 @@ uses
   {$IFDEF LINUX}
   Posix.SysSocket, Posix.NetinetIn, Posix.ArpaInet, Posix.Unistd, Posix.NetDB,
   {$ENDIF}
-  SysUtils, Classes, System.IOUtils, Logger, System.Generics.Collections;
+  SysUtils, Classes, System.IOUtils, Logger,
+  System.Generics.Collections, GHTTPConstants;
 
-const
-  // SSL library filenames for OpenSSL 3.x
-  SSL_DLL = 'libssl-3.dll';
-  CRYPTO_DLL = 'libcrypto-3.dll';
-
-  // SSL Constants
-  SSL_FILETYPE_PEM = 1;
-  SSL_VERIFY_NONE = 0;
-  SSL_ERROR_WANT_READ = 2;
-  SSL_ERROR_WANT_WRITE = 3;
-  SSL_ERROR_ZERO_RETURN = 6;
-
-  // OpenSSL 3.x version constants
-  TLS1_2_VERSION = $0303;
-  TLS1_3_VERSION = $0304;
-
-  // OpenSSL version type
-  OPENSSL_VERSION = 0;
-
-  // Session cache modes
-  SSL_SESS_CACHE_SERVER = $0002;
 
 type
-  // OpenSSL types
+  TSecureProtocol = (spSSL2, spSSL3, spTLS1, spTLS11, spTLS12, spTLS13);
+  TSecureProtocols = set of TSecureProtocol;
+
   PSSL_CTX = Pointer;
   PSSL = Pointer;
   PSSL_METHOD = Pointer;
   PX509 = Pointer;
   PEVP_PKEY = Pointer;
 
-  // SSL Socket record to associate SSL object with socket
   TSSLSocketInfo = record
     Socket: TSocket;
     SSL: PSSL;
@@ -82,10 +35,8 @@ type
     procedure RemoveBySocket(ASocket: TSocket);
   end;
 
-  // SSL exception
   EOpenSSLException = class(Exception);
 
-  // OpenSSL wrapper class
   TOpenSSLWrapper = class
   private
     FSSLContext: PSSL_CTX;
@@ -96,8 +47,8 @@ type
     FPrivateKeyPath: string;
     FInitialized: Boolean;
     FLogger: THttpLogger;
+    FSecureProtocols: TSecureProtocols;
 
-    // OpenSSL 3.x function pointers
     FOPENSSL_init_ssl: function(opts: UInt64; settings: Pointer): Integer; cdecl;
     FOPENSSL_init_crypto: function(opts: UInt64; settings: Pointer): Integer; cdecl;
     FSSL_CTX_new: function(meth: PSSL_METHOD): PSSL_CTX; cdecl;
@@ -107,6 +58,7 @@ type
     FSSL_CTX_check_private_key: function(ctx: PSSL_CTX): Integer; cdecl;
     FSSL_CTX_set_verify: procedure(ctx: PSSL_CTX; mode: Integer; callback: Pointer); cdecl;
     FSSL_CTX_set_min_proto_version: function(ctx: PSSL_CTX; version: Integer): Integer; cdecl;
+    FSSL_CTX_set_max_proto_version: function(ctx: PSSL_CTX; version: Integer): Integer; cdecl;
     FSSL_CTX_set_cipher_list: function(ctx: PSSL_CTX; const str: PAnsiChar): Integer; cdecl;
     FSSL_CTX_set_session_cache_mode: function(ctx: PSSL_CTX; mode: Integer): Integer; cdecl;
     FOPENSSL_version: function(t: Integer): PAnsiChar; cdecl;
@@ -119,19 +71,20 @@ type
     FSSL_write: function(ssl: PSSL; const buf: Pointer; num: Integer): Integer; cdecl;
     FSSL_shutdown: function(ssl: PSSL): Integer; cdecl;
     FSSL_get_error: function(ssl: PSSL; ret: Integer): Integer; cdecl;
-    FTLS_server_method: function: PSSL_METHOD; cdecl; // Changed name for OpenSSL 3.x
+    FTLS_server_method: function: PSSL_METHOD; cdecl;
     FERR_get_error: function: Cardinal; cdecl;
     FERR_error_string: function(e: Cardinal; buf: PAnsiChar): PAnsiChar; cdecl;
     FERR_clear_error: procedure; cdecl;
     FSSL_get_version: function(ssl: PSSL): PAnsiChar; cdecl;
     FSSL_get_cipher_name: function(ssl: PSSL): PAnsiChar; cdecl;
+    FSSL_CIPHER_get_name: function(cipher: Pointer): PAnsiChar; cdecl;
+    FSSL_get_current_cipher: function(ssl: PSSL): Pointer; cdecl;
 
     function LoadOpenSSLLibraries: Boolean;
     procedure UnloadOpenSSLLibraries;
     function GetProcAddress(Module: THandle; ProcName: AnsiString): Pointer;
     procedure VerifySSLFunctions;
     function SimpleSSLTest: Boolean;
-    procedure LogSSLError(const Msg: string);
     procedure LogSSLErrorDetailed(const Msg: string);
     function CheckCertificateFiles: Boolean;
     procedure WriteLog(const AMessage: string);
@@ -143,27 +96,23 @@ type
     procedure Initialize;
     procedure Finalize;
 
-    // SSL connection management
     function CreateSSLObject(Socket: TSocket): Boolean;
     function PerformSSLHandshake(Socket: TSocket): Boolean;
     procedure CleanupSSLConnection(Socket: TSocket);
 
-    // Socket operations
     procedure SetSocketBlocking(Socket: TSocket);
     procedure SetSocketNonBlocking(Socket: TSocket);
 
-    // SSL I/O operations
     function SSLRead(Socket: TSocket; var Buffer; Length: Integer): Integer;
     function SSLWrite(Socket: TSocket; const Buffer; Length: Integer): Integer;
 
-    // Properties
     property CertificatePath: string read FCertificatePath write FCertificatePath;
     property PrivateKeyPath: string read FPrivateKeyPath write FPrivateKeyPath;
     property SSLContext: PSSL_CTX read FSSLContext;
     property Initialized: Boolean read FInitialized;
     property SSLSocketList: TSSLSocketList read FSSLSocketList;
+    property SecureProtocols: TSecureProtocols read FSecureProtocols write FSecureProtocols;
 
-    // Get connection information
     function GetSSLVersion(Socket: TSocket): string;
     function GetSSLCipherName(Socket: TSocket): string;
   end;
@@ -217,10 +166,10 @@ begin
   FCryptoLibraryHandle := 0;
   FInitialized := False;
   FLogger := ALogger;
+  FSecureProtocols := [spTLS12, spTLS13];
 
-  // Default certificate paths (relative to application directory)
-  FCertificatePath := TPath.Combine(ExtractFilePath(ParamStr(0)), 'cert.pem');
-  FPrivateKeyPath := TPath.Combine(ExtractFilePath(ParamStr(0)), 'key.pem');
+  FCertificatePath := TPath.Combine(ExtractFilePath(ParamStr(0)), DEFAULT_CERT_FILE);
+  FPrivateKeyPath := TPath.Combine(ExtractFilePath(ParamStr(0)), DEFAULT_KEY_FILE);
 end;
 
 destructor TOpenSSLWrapper.Destroy;
@@ -240,8 +189,12 @@ end;
 function TOpenSSLWrapper.GetProcAddress(Module: THandle; ProcName: AnsiString): Pointer;
 begin
   Result := Windows.GetProcAddress(Module, PAnsiChar(ProcName));
-  if Result = nil then
-    WriteLog(Format('Failed to get address for procedure: %s', [string(ProcName)]));
+  if (Result = nil) and
+     (ProcName <> PROC_SSL_CTX_SET_MIN_PROTO_VERSION) and
+     (ProcName <> PROC_SSL_CTX_SET_MAX_PROTO_VERSION) and
+     (ProcName <> PROC_SSL_CTX_SET_SESSION_CACHE_MODE) and
+     (ProcName <> PROC_SSL_GET_CIPHER_NAME) then
+    WriteLog(Format(LOG_FAILED_GET_PROC_ADDRESS, [string(ProcName)]));
 end;
 
 function TOpenSSLWrapper.LoadOpenSSLLibraries: Boolean;
@@ -250,65 +203,62 @@ var
 begin
   Result := False;
 
-  // Check if libraries are already loaded
   if (FSSLLibraryHandle <> 0) and (FCryptoLibraryHandle <> 0) then
   begin
     Result := True;
     Exit;
   end;
 
-  // Get path to the application directory
   LibPath := ExtractFilePath(ParamStr(0));
-  WriteLog(Format('Looking for OpenSSL libraries in: %s', [LibPath]));
+  WriteLog(Format(LOG_LOOKING_FOR_LIBRARIES, [LibPath]));
 
-  // Load SSL library from application directory
   FSSLLibraryHandle := LoadLibrary(PChar(TPath.Combine(LibPath, SSL_DLL)));
   if FSSLLibraryHandle = 0 then
   begin
-    WriteLog(Format('Failed to load %s', [SSL_DLL]));
+    WriteLog(Format(LOG_FAILED_TO_LOAD, [SSL_DLL]));
     Exit;
   end;
 
-  // Load Crypto library
   FCryptoLibraryHandle := LoadLibrary(PChar(TPath.Combine(LibPath, CRYPTO_DLL)));
   if FCryptoLibraryHandle = 0 then
   begin
-    WriteLog(Format('Failed to load %s', [CRYPTO_DLL]));
+    WriteLog(Format(LOG_FAILED_TO_LOAD, [CRYPTO_DLL]));
     FreeLibrary(FSSLLibraryHandle);
     FSSLLibraryHandle := 0;
     Exit;
   end;
 
-  // Get OpenSSL 3.x function addresses
-  @FOPENSSL_init_ssl := GetProcAddress(FSSLLibraryHandle, 'OPENSSL_init_ssl');
-  @FOPENSSL_init_crypto := GetProcAddress(FCryptoLibraryHandle, 'OPENSSL_init_crypto');
-  @FSSL_CTX_new := GetProcAddress(FSSLLibraryHandle, 'SSL_CTX_new');
-  @FSSL_CTX_free := GetProcAddress(FSSLLibraryHandle, 'SSL_CTX_free');
-  @FSSL_CTX_use_certificate_file := GetProcAddress(FSSLLibraryHandle, 'SSL_CTX_use_certificate_file');
-  @FSSL_CTX_use_PrivateKey_file := GetProcAddress(FSSLLibraryHandle, 'SSL_CTX_use_PrivateKey_file');
-  @FSSL_CTX_check_private_key := GetProcAddress(FSSLLibraryHandle, 'SSL_CTX_check_private_key');
-  @FSSL_CTX_set_verify := GetProcAddress(FSSLLibraryHandle, 'SSL_CTX_set_verify');
-  @FSSL_CTX_set_min_proto_version := GetProcAddress(FSSLLibraryHandle, 'SSL_CTX_set_min_proto_version');
-  @FSSL_CTX_set_cipher_list := GetProcAddress(FSSLLibraryHandle, 'SSL_CTX_set_cipher_list');
-  @FSSL_CTX_set_session_cache_mode := GetProcAddress(FSSLLibraryHandle, 'SSL_CTX_set_session_cache_mode');
-  @FOPENSSL_version := GetProcAddress(FCryptoLibraryHandle, 'OpenSSL_version');
-  @FSSL_new := GetProcAddress(FSSLLibraryHandle, 'SSL_new');
-  @FSSL_free := GetProcAddress(FSSLLibraryHandle, 'SSL_free');
-  @FSSL_set_fd := GetProcAddress(FSSLLibraryHandle, 'SSL_set_fd');
-  @FSSL_accept := GetProcAddress(FSSLLibraryHandle, 'SSL_accept');
-  @FSSL_connect := GetProcAddress(FSSLLibraryHandle, 'SSL_connect');
-  @FSSL_read := GetProcAddress(FSSLLibraryHandle, 'SSL_read');
-  @FSSL_write := GetProcAddress(FSSLLibraryHandle, 'SSL_write');
-  @FSSL_shutdown := GetProcAddress(FSSLLibraryHandle, 'SSL_shutdown');
-  @FSSL_get_error := GetProcAddress(FSSLLibraryHandle, 'SSL_get_error');
-  @FTLS_server_method := GetProcAddress(FSSLLibraryHandle, 'TLS_server_method'); // Changed name in OpenSSL 3.x
-  @FERR_get_error := GetProcAddress(FCryptoLibraryHandle, 'ERR_get_error');
-  @FERR_error_string := GetProcAddress(FCryptoLibraryHandle, 'ERR_error_string');
-  @FERR_clear_error := GetProcAddress(FCryptoLibraryHandle, 'ERR_clear_error');
-  @FSSL_get_version := GetProcAddress(FSSLLibraryHandle, 'SSL_get_version');
-  @FSSL_get_cipher_name := GetProcAddress(FSSLLibraryHandle, 'SSL_get_cipher_name');
+  @FOPENSSL_init_ssl := GetProcAddress(FSSLLibraryHandle, PROC_OPENSSL_INIT_SSL);
+  @FOPENSSL_init_crypto := GetProcAddress(FCryptoLibraryHandle, PROC_OPENSSL_INIT_CRYPTO);
+  @FSSL_CTX_new := GetProcAddress(FSSLLibraryHandle, PROC_SSL_CTX_NEW);
+  @FSSL_CTX_free := GetProcAddress(FSSLLibraryHandle, PROC_SSL_CTX_FREE);
+  @FSSL_CTX_use_certificate_file := GetProcAddress(FSSLLibraryHandle, PROC_SSL_CTX_USE_CERT_FILE);
+  @FSSL_CTX_use_PrivateKey_file := GetProcAddress(FSSLLibraryHandle, PROC_SSL_CTX_USE_PRIVKEY_FILE);
+  @FSSL_CTX_check_private_key := GetProcAddress(FSSLLibraryHandle, PROC_SSL_CTX_CHECK_PRIVKEY);
+  @FSSL_CTX_set_verify := GetProcAddress(FSSLLibraryHandle, PROC_SSL_CTX_SET_VERIFY);
+  @FSSL_CTX_set_min_proto_version := Windows.GetProcAddress(FSSLLibraryHandle, PROC_SSL_CTX_SET_MIN_PROTO_VERSION);
+  @FSSL_CTX_set_max_proto_version := Windows.GetProcAddress(FSSLLibraryHandle, PROC_SSL_CTX_SET_MAX_PROTO_VERSION);
+  @FSSL_CTX_set_cipher_list := Windows.GetProcAddress(FSSLLibraryHandle, PROC_SSL_CTX_SET_CIPHER_LIST);
+  @FSSL_CTX_set_session_cache_mode := Windows.GetProcAddress(FSSLLibraryHandle, PROC_SSL_CTX_SET_SESSION_CACHE_MODE);
+  @FOPENSSL_version := Windows.GetProcAddress(FCryptoLibraryHandle, PROC_OPENSSL_VERSION);
+  @FSSL_new := GetProcAddress(FSSLLibraryHandle, PROC_SSL_NEW);
+  @FSSL_free := GetProcAddress(FSSLLibraryHandle, PROC_SSL_FREE);
+  @FSSL_set_fd := GetProcAddress(FSSLLibraryHandle, PROC_SSL_SET_FD);
+  @FSSL_accept := GetProcAddress(FSSLLibraryHandle, PROC_SSL_ACCEPT);
+  @FSSL_connect := GetProcAddress(FSSLLibraryHandle, PROC_SSL_CONNECT);
+  @FSSL_read := GetProcAddress(FSSLLibraryHandle, PROC_SSL_READ);
+  @FSSL_write := GetProcAddress(FSSLLibraryHandle, PROC_SSL_WRITE);
+  @FSSL_shutdown := GetProcAddress(FSSLLibraryHandle, PROC_SSL_SHUTDOWN);
+  @FSSL_get_error := GetProcAddress(FSSLLibraryHandle, PROC_SSL_GET_ERROR);
+  @FTLS_server_method := GetProcAddress(FSSLLibraryHandle, PROC_TLS_SERVER_METHOD);
+  @FERR_get_error := GetProcAddress(FCryptoLibraryHandle, PROC_ERR_GET_ERROR);
+  @FERR_error_string := GetProcAddress(FCryptoLibraryHandle, PROC_ERR_ERROR_STRING);
+  @FERR_clear_error := GetProcAddress(FCryptoLibraryHandle, PROC_ERR_CLEAR_ERROR);
+  @FSSL_get_version := Windows.GetProcAddress(FSSLLibraryHandle, PROC_SSL_GET_VERSION);
+  @FSSL_get_cipher_name := Windows.GetProcAddress(FSSLLibraryHandle, PROC_SSL_GET_CIPHER_NAME);
+  @FSSL_get_current_cipher := Windows.GetProcAddress(FSSLLibraryHandle, PROC_SSL_GET_CURRENT_CIPHER);
+  @FSSL_CIPHER_get_name := Windows.GetProcAddress(FSSLLibraryHandle, PROC_SSL_CIPHER_GET_NAME);
 
-  // Verify all functions were loaded
   Result := Assigned(FOPENSSL_init_ssl) and
             Assigned(FOPENSSL_init_crypto) and
             Assigned(FSSL_CTX_new) and
@@ -331,32 +281,12 @@ begin
             Assigned(FERR_error_string) and
             Assigned(FERR_clear_error);
 
-  // Optional functions - don't fail if these aren't available
-  if Result then
-  begin
-    // Log which optional functions are available
-    if not Assigned(FSSL_CTX_set_min_proto_version) then
-      WriteLog('Warning: SSL_CTX_set_min_proto_version not available in this OpenSSL version');
-    if not Assigned(FSSL_CTX_set_cipher_list) then
-      WriteLog('Warning: SSL_CTX_set_cipher_list not available in this OpenSSL version');
-    if not Assigned(FSSL_CTX_set_session_cache_mode) then
-      WriteLog('Warning: SSL_CTX_set_session_cache_mode not available in this OpenSSL version');
-    if not Assigned(FOPENSSL_version) then
-      WriteLog('Warning: OpenSSL_version not available in this OpenSSL version');
-    if not Assigned(FSSL_get_version) then
-      WriteLog('Warning: SSL_get_version not available in this OpenSSL version');
-    if not Assigned(FSSL_get_cipher_name) then
-      WriteLog('Warning: SSL_get_cipher_name not available in this OpenSSL version');
-  end;
-
   if not Result then
   begin
-    WriteLog('Failed to load all required OpenSSL functions');
+    WriteLog(LOG_FAILED_LOAD_FUNCTIONS);
     UnloadOpenSSLLibraries;
-  end;
-
-  // Success
-  WriteLog('OpenSSL libraries loaded successfully');
+  end else
+    WriteLog(LOG_LIBRARIES_LOADED);
 end;
 
 procedure TOpenSSLWrapper.UnloadOpenSSLLibraries;
@@ -373,7 +303,6 @@ begin
     FCryptoLibraryHandle := 0;
   end;
 
-  // Clear function pointers
   @FOPENSSL_init_ssl := nil;
   @FOPENSSL_init_crypto := nil;
   @FSSL_CTX_new := nil;
@@ -383,6 +312,7 @@ begin
   @FSSL_CTX_check_private_key := nil;
   @FSSL_CTX_set_verify := nil;
   @FSSL_CTX_set_min_proto_version := nil;
+  @FSSL_CTX_set_max_proto_version := nil;
   @FSSL_CTX_set_cipher_list := nil;
   @FSSL_CTX_set_session_cache_mode := nil;
   @FOPENSSL_version := nil;
@@ -401,50 +331,51 @@ begin
   @FERR_clear_error := nil;
   @FSSL_get_version := nil;
   @FSSL_get_cipher_name := nil;
+  @FSSL_get_current_cipher := nil;
+  @FSSL_CIPHER_get_name := nil;
 end;
 
 function TOpenSSLWrapper.CheckCertificateFiles: Boolean;
 begin
   Result := False;
 
-  WriteLog(Format('Checking certificate file: %s', [FCertificatePath]));
+  WriteLog(Format(LOG_CHECKING_CERTIFICATE, [FCertificatePath]));
   if not FileExists(FCertificatePath) then
   begin
-    WriteLog('Certificate file not found!');
+    WriteLog(LOG_CERT_NOT_FOUND);
     Exit;
   end;
 
-  WriteLog(Format('Checking private key file: %s', [FPrivateKeyPath]));
+  WriteLog(Format(LOG_CHECKING_KEY, [FPrivateKeyPath]));
   if not FileExists(FPrivateKeyPath) then
   begin
-    WriteLog('Private key file not found!');
+    WriteLog(LOG_KEY_NOT_FOUND);
     Exit;
   end;
 
   try
-    // Try to read files to verify access permissions
     var CertContent := TFile.ReadAllText(FCertificatePath);
     var KeyContent := TFile.ReadAllText(FPrivateKeyPath);
 
-    if not CertContent.Contains('BEGIN CERTIFICATE') then
+    if not CertContent.Contains(LOG_BEGIN_CERTIFICATE) then
     begin
-      WriteLog('Certificate file format appears invalid');
+      WriteLog(LOG_INVALID_CERT_FORMAT);
       Exit;
     end;
 
-    if not KeyContent.Contains('BEGIN PRIVATE KEY') and
-       not KeyContent.Contains('BEGIN RSA PRIVATE KEY') then
+    if not KeyContent.Contains(LOG_BEGIN_PRIVATE_KEY) and
+       not KeyContent.Contains(LOG_BEGIN_RSA_PRIVATE_KEY) then
     begin
-      WriteLog('Private key file format appears invalid');
+      WriteLog(LOG_INVALID_KEY_FORMAT);
       Exit;
     end;
 
     Result := True;
-    WriteLog('Certificate files are valid and accessible');
+    WriteLog(LOG_CERT_FILES_VALID);
   except
     on E: Exception do
     begin
-      WriteLog(Format('Error accessing certificate files: %s', [E.Message]));
+      WriteLog(Format(LOG_ERROR_ACCESSING_FILES, [E.Message]));
       Result := False;
     end;
   end;
@@ -452,27 +383,27 @@ end;
 
 procedure TOpenSSLWrapper.VerifySSLFunctions;
 begin
-  WriteLog('Verifying SSL function pointers...');
-  if not Assigned(FOPENSSL_init_ssl) then WriteLog('OPENSSL_init_ssl is NULL');
-  if not Assigned(FOPENSSL_init_crypto) then WriteLog('OPENSSL_init_crypto is NULL');
-  if not Assigned(FSSL_CTX_new) then WriteLog('SSL_CTX_new is NULL');
-  if not Assigned(FSSL_CTX_free) then WriteLog('SSL_CTX_free is NULL');
-  if not Assigned(FSSL_CTX_use_certificate_file) then WriteLog('SSL_CTX_use_certificate_file is NULL');
-  if not Assigned(FSSL_CTX_use_PrivateKey_file) then WriteLog('SSL_CTX_use_PrivateKey_file is NULL');
-  if not Assigned(FSSL_CTX_check_private_key) then WriteLog('SSL_CTX_check_private_key is NULL');
-  if not Assigned(FSSL_CTX_set_verify) then WriteLog('SSL_CTX_set_verify is NULL');
-  if not Assigned(FSSL_new) then WriteLog('SSL_new is NULL');
-  if not Assigned(FSSL_free) then WriteLog('SSL_free is NULL');
-  if not Assigned(FSSL_set_fd) then WriteLog('SSL_set_fd is NULL');
-  if not Assigned(FSSL_accept) then WriteLog('SSL_accept is NULL');
-  if not Assigned(FSSL_read) then WriteLog('SSL_read is NULL');
-  if not Assigned(FSSL_write) then WriteLog('SSL_write is NULL');
-  if not Assigned(FSSL_shutdown) then WriteLog('SSL_shutdown is NULL');
-  if not Assigned(FSSL_get_error) then WriteLog('SSL_get_error is NULL');
-  if not Assigned(FTLS_server_method) then WriteLog('TLS_server_method is NULL');
-  if not Assigned(FERR_get_error) then WriteLog('ERR_get_error is NULL');
-  if not Assigned(FERR_error_string) then WriteLog('ERR_error_string is NULL');
-  if not Assigned(FERR_clear_error) then WriteLog('ERR_clear_error is NULL');
+  WriteLog(LOG_VERIFYING_POINTERS);
+  if not Assigned(FOPENSSL_init_ssl) then WriteLog(Format(LOG_NULL_POINTER, [PROC_OPENSSL_INIT_SSL]));
+  if not Assigned(FOPENSSL_init_crypto) then WriteLog(Format(LOG_NULL_POINTER, [PROC_OPENSSL_INIT_CRYPTO]));
+  if not Assigned(FSSL_CTX_new) then WriteLog(Format(LOG_NULL_POINTER, [PROC_SSL_CTX_NEW]));
+  if not Assigned(FSSL_CTX_free) then WriteLog(Format(LOG_NULL_POINTER, [PROC_SSL_CTX_FREE]));
+  if not Assigned(FSSL_CTX_use_certificate_file) then WriteLog(Format(LOG_NULL_POINTER, [PROC_SSL_CTX_USE_CERT_FILE]));
+  if not Assigned(FSSL_CTX_use_PrivateKey_file) then WriteLog(Format(LOG_NULL_POINTER, [PROC_SSL_CTX_USE_PRIVKEY_FILE]));
+  if not Assigned(FSSL_CTX_check_private_key) then WriteLog(Format(LOG_NULL_POINTER, [PROC_SSL_CTX_CHECK_PRIVKEY]));
+  if not Assigned(FSSL_CTX_set_verify) then WriteLog(Format(LOG_NULL_POINTER, [PROC_SSL_CTX_SET_VERIFY]));
+  if not Assigned(FSSL_new) then WriteLog(Format(LOG_NULL_POINTER, [PROC_SSL_NEW]));
+  if not Assigned(FSSL_free) then WriteLog(Format(LOG_NULL_POINTER, [PROC_SSL_FREE]));
+  if not Assigned(FSSL_set_fd) then WriteLog(Format(LOG_NULL_POINTER, [PROC_SSL_SET_FD]));
+  if not Assigned(FSSL_accept) then WriteLog(Format(LOG_NULL_POINTER, [PROC_SSL_ACCEPT]));
+  if not Assigned(FSSL_read) then WriteLog(Format(LOG_NULL_POINTER, [PROC_SSL_READ]));
+if not Assigned(FSSL_write) then WriteLog(Format(LOG_NULL_POINTER, [PROC_SSL_WRITE]));
+  if not Assigned(FSSL_shutdown) then WriteLog(Format(LOG_NULL_POINTER, [PROC_SSL_SHUTDOWN]));
+  if not Assigned(FSSL_get_error) then WriteLog(Format(LOG_NULL_POINTER, [PROC_SSL_GET_ERROR]));
+  if not Assigned(FTLS_server_method) then WriteLog(Format(LOG_NULL_POINTER, [PROC_TLS_SERVER_METHOD]));
+  if not Assigned(FERR_get_error) then WriteLog(Format(LOG_NULL_POINTER, [PROC_ERR_GET_ERROR]));
+  if not Assigned(FERR_error_string) then WriteLog(Format(LOG_NULL_POINTER, [PROC_ERR_ERROR_STRING]));
+  if not Assigned(FERR_clear_error) then WriteLog(Format(LOG_NULL_POINTER, [PROC_ERR_CLEAR_ERROR]));
 end;
 
 function TOpenSSLWrapper.SimpleSSLTest: Boolean;
@@ -480,19 +411,17 @@ var
   TestSSL: PSSL;
 begin
   Result := False;
-  WriteLog('Running simple SSL test...');
+  WriteLog(LOG_RUNNING_SSL_TEST);
 
-  // Create an SSL object
   TestSSL := FSSL_new(FSSLContext);
   if TestSSL = nil then
   begin
-    LogSSLErrorDetailed('Failed to create test SSL object');
+    LogSSLErrorDetailed(LOG_TEST_SSL_OBJECT_FAILED);
     Exit;
   end;
 
   try
-    // Just a basic verification that SSL functions work
-    WriteLog('SSL object created successfully');
+    WriteLog(LOG_SSL_OBJECT_SUCCESS);
     Result := True;
   finally
     FSSL_free(TestSSL);
@@ -503,7 +432,7 @@ procedure TOpenSSLWrapper.SetSocketBlocking(Socket: TSocket);
 var
   NonBlocking: u_long;
 begin
-  NonBlocking := 0; // 0 = blocking mode
+  NonBlocking := 0;
   ioctlsocket(Socket, FIONBIO, NonBlocking);
 end;
 
@@ -511,118 +440,145 @@ procedure TOpenSSLWrapper.SetSocketNonBlocking(Socket: TSocket);
 var
   NonBlocking: u_long;
 begin
-  NonBlocking := 1; // 1 = non-blocking mode
+  NonBlocking := 1;
   ioctlsocket(Socket, FIONBIO, NonBlocking);
 end;
 
 procedure TOpenSSLWrapper.Initialize;
 var
   VersionStr: AnsiString;
+  MinVersion, MaxVersion: Integer;
 begin
-  // Check if already initialized
   if FInitialized then
     Exit;
 
-  WriteLog('Initializing SSL...');
+  WriteLog(LOG_INITIALIZING_SSL);
 
-  // Clear any existing SSL errors
   if Assigned(FERR_clear_error) then
     FERR_clear_error();
 
-  // Load OpenSSL libraries
   if not LoadOpenSSLLibraries then
-    raise EOpenSSLException.Create('Failed to load OpenSSL libraries');
+    raise EOpenSSLException.Create(ERR_LOAD_OPENSSL_LIBRARIES);
 
-  // Verify function pointers
   VerifySSLFunctions;
 
-  // Log OpenSSL version if available
   if Assigned(FOPENSSL_version) then
   begin
     VersionStr := FOPENSSL_version(OPENSSL_VERSION);
-    WriteLog(Format('Using OpenSSL version: %s', [string(VersionStr)]));
+    WriteLog(Format(LOG_OPENSSL_VERSION, [string(VersionStr)]));
   end;
 
-  // Check certificate and key files
   if not CheckCertificateFiles then
-    raise EOpenSSLException.Create('Failed to verify certificate files');
+    raise EOpenSSLException.Create(ERR_VERIFY_CERTIFICATE_FILES);
 
-  // Initialize OpenSSL for OpenSSL 3.x
   FOPENSSL_init_crypto(0, nil);
   FOPENSSL_init_ssl(0, nil);
 
-  // Create SSL context
   FSSLContext := FSSL_CTX_new(FTLS_server_method());
   if FSSLContext = nil then
   begin
-    LogSSLErrorDetailed('Failed to create SSL context');
-    raise EOpenSSLException.Create('Failed to create SSL context');
+    LogSSLErrorDetailed(LOG_CREATE_SSL_CONTEXT_FAILED);
+    raise EOpenSSLException.Create(ERR_CREATE_SSL_CONTEXT);
   end;
 
-  // Set certificate file
   if FSSL_CTX_use_certificate_file(FSSLContext, PAnsiChar(AnsiString(FCertificatePath)),
                                  SSL_FILETYPE_PEM) <= 0 then
   begin
-    LogSSLErrorDetailed('Failed to load certificate');
+    LogSSLErrorDetailed(LOG_LOAD_CERTIFICATE_FAILED);
     FSSL_CTX_free(FSSLContext);
     FSSLContext := nil;
-    raise EOpenSSLException.Create('Failed to load certificate');
+    raise EOpenSSLException.Create(ERR_LOAD_CERTIFICATE);
   end;
 
-  // Set private key file
   if FSSL_CTX_use_PrivateKey_file(FSSLContext, PAnsiChar(AnsiString(FPrivateKeyPath)),
                                SSL_FILETYPE_PEM) <= 0 then
   begin
-    LogSSLErrorDetailed('Failed to load private key');
+    LogSSLErrorDetailed(LOG_LOAD_PRIVATE_KEY_FAILED);
     FSSL_CTX_free(FSSLContext);
     FSSLContext := nil;
-    raise EOpenSSLException.Create('Failed to load private key');
+    raise EOpenSSLException.Create(ERR_LOAD_PRIVATE_KEY);
   end;
 
-  // Verify private key
   if FSSL_CTX_check_private_key(FSSLContext) <= 0 then
   begin
-    LogSSLErrorDetailed('Private key does not match the certificate');
+    LogSSLErrorDetailed(LOG_PRIVATE_KEY_MISMATCH);
     FSSL_CTX_free(FSSLContext);
     FSSLContext := nil;
-    raise EOpenSSLException.Create('Private key does not match the certificate');
+    raise EOpenSSLException.Create(ERR_PRIVATE_KEY_MISMATCH);
   end;
 
-  // Set verification method to none (no client certificate verification)
   FSSL_CTX_set_verify(FSSLContext, SSL_VERIFY_NONE, nil);
 
-  // Optional: Force TLS 1.2 or later if available
+  MinVersion := TLS1_2_VERSION;
+  if spSSL2 in FSecureProtocols then
+    MinVersion := SSL2_VERSION
+  else if spSSL3 in FSecureProtocols then
+    MinVersion := SSL3_VERSION
+  else if spTLS1 in FSecureProtocols then
+    MinVersion := TLS1_VERSION
+  else if spTLS11 in FSecureProtocols then
+    MinVersion := TLS1_1_VERSION
+  else if spTLS12 in FSecureProtocols then
+    MinVersion := TLS1_2_VERSION
+  else if spTLS13 in FSecureProtocols then
+    MinVersion := TLS1_3_VERSION;
+
+  MaxVersion := TLS1_3_VERSION;
+  if spTLS13 in FSecureProtocols then
+    MaxVersion := TLS1_3_VERSION
+  else if spTLS12 in FSecureProtocols then
+    MaxVersion := TLS1_2_VERSION
+  else if spTLS11 in FSecureProtocols then
+    MaxVersion := TLS1_1_VERSION
+  else if spTLS1 in FSecureProtocols then
+    MaxVersion := TLS1_VERSION
+  else if spSSL3 in FSecureProtocols then
+    MaxVersion := SSL3_VERSION
+  else if spSSL2 in FSecureProtocols then
+    MaxVersion := SSL2_VERSION;
+
   if Assigned(FSSL_CTX_set_min_proto_version) then
   begin
-    if FSSL_CTX_set_min_proto_version(FSSLContext, TLS1_2_VERSION) <= 0 then
-      LogSSLErrorDetailed('Warning: Failed to set minimum protocol version to TLS 1.2');
-  end;
+    if FSSL_CTX_set_min_proto_version(FSSLContext, MinVersion) <= 0 then
+      WriteLog(LOG_SET_MIN_VERSION_FAILED)
+    else
+      WriteLog(Format(LOG_SET_MIN_VERSION_SUCCESS, [MinVersion]));
+  end
+  else
+    WriteLog(LOG_MIN_VERSION_NOT_SUPPORTED);
 
-  // Optional: Set cipher list to a more compatible set if available
+  if Assigned(FSSL_CTX_set_max_proto_version) then
+  begin
+    if FSSL_CTX_set_max_proto_version(FSSLContext, MaxVersion) <= 0 then
+      WriteLog(LOG_SET_MAX_VERSION_FAILED)
+    else
+      WriteLog(Format(LOG_SET_MAX_VERSION_SUCCESS, [MaxVersion]));
+  end
+  else
+    WriteLog(LOG_MAX_VERSION_NOT_SUPPORTED);
+
   if Assigned(FSSL_CTX_set_cipher_list) then
   begin
-    if FSSL_CTX_set_cipher_list(FSSLContext,
-       PAnsiChar('HIGH:MEDIUM:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!MD5')) <= 0 then
-      LogSSLErrorDetailed('Warning: Failed to set cipher list');
+    if FSSL_CTX_set_cipher_list(FSSLContext, PAnsiChar(CIPHER_LIST)) <= 0 then
+      WriteLog(LOG_SET_CIPHER_LIST_FAILED);
   end;
 
-  // Optional: Enable session caching if available
   if Assigned(FSSL_CTX_set_session_cache_mode) then
   begin
-    FSSL_CTX_set_session_cache_mode(FSSLContext, SSL_SESS_CACHE_SERVER);
+    if FSSL_CTX_set_session_cache_mode(FSSLContext, SSL_SESS_CACHE_SERVER) <= 0 then
+      WriteLog(LOG_SET_SESSION_CACHE_FAILED);
   end;
 
-  // Test SSL functionality
   if not SimpleSSLTest then
   begin
-    WriteLog('SSL initialization test failed');
+    WriteLog(LOG_SSL_INIT_TEST_FAILED);
     FSSL_CTX_free(FSSLContext);
     FSSLContext := nil;
-    raise EOpenSSLException.Create('SSL initialization test failed');
+    raise EOpenSSLException.Create(ERR_SSL_INIT_TEST_FAILED);
   end;
 
   FInitialized := True;
-  WriteLog('SSL initialized successfully');
+  WriteLog(LOG_SSL_INITIALIZED);
 end;
 
 procedure TOpenSSLWrapper.Finalize;
@@ -633,9 +589,8 @@ begin
   if not FInitialized then
     Exit;
 
-  WriteLog('Finalizing SSL...');
+  WriteLog(LOG_FINALIZING_SSL);
 
-  // Free all SSL objects
   for I := FSSLSocketList.Count - 1 downto 0 do
   begin
     SocketInfo := FSSLSocketList[I];
@@ -646,10 +601,8 @@ begin
     end;
   end;
 
-  // Clear the socket list
   FSSLSocketList.Clear;
 
-  // Free SSL context
   if FSSLContext <> nil then
   begin
     FSSL_CTX_free(FSSLContext);
@@ -657,30 +610,9 @@ begin
   end;
 
   FInitialized := False;
-  WriteLog('SSL finalized');
+  WriteLog(LOG_SSL_FINALIZED);
 end;
 
-procedure TOpenSSLWrapper.LogSSLError(const Msg: string);
-var
-  ErrorCode: Cardinal;
-  ErrorStr: string;
-begin
-  // Log all errors in the queue, not just the first one
-  ErrorCode := FERR_get_error();
-
-  if ErrorCode = 0 then
-  begin
-    WriteLog(Format('%s: No specific SSL error code available', [Msg]));
-    Exit;
-  end;
-
-  while ErrorCode <> 0 do
-  begin
-    ErrorStr := string(FERR_error_string(ErrorCode, nil));
-    WriteLog(Format('%s: %s (0x%x)', [Msg, ErrorStr, ErrorCode]));
-    ErrorCode := FERR_get_error();
-  end;
-end;
 
 procedure TOpenSSLWrapper.LogSSLErrorDetailed(const Msg: string);
 var
@@ -690,11 +622,10 @@ var
 begin
   WriteLog(Msg);
 
-  // Log all errors in the queue
   ErrorCode := FERR_get_error();
   if ErrorCode = 0 then
   begin
-    WriteLog('  No SSL errors in queue');
+    WriteLog(LOG_SSL_ERROR_HEADER);
     Exit;
   end;
 
@@ -703,7 +634,7 @@ begin
     FillChar(ErrorBuffer, SizeOf(ErrorBuffer), 0);
     FERR_error_string(ErrorCode, @ErrorBuffer);
     ErrorStr := ErrorBuffer;
-    WriteLog(Format('  SSL Error: %s (0x%x)', [string(ErrorStr), ErrorCode]));
+    WriteLog(Format(LOG_SSL_ERROR_DETAIL, [string(ErrorStr), ErrorCode]));
     ErrorCode := FERR_get_error();
   end;
 
@@ -720,27 +651,24 @@ begin
 
   if not FInitialized then
   begin
-    WriteLog('Cannot create SSL object: SSL not initialized');
+    WriteLog(LOG_SSL_OBJECT_NOT_INITIALIZED);
     Exit;
   end;
 
-  // Create SSL structure for this connection
   SSL := FSSL_new(FSSLContext);
   if SSL = nil then
   begin
-    LogSSLErrorDetailed('Failed to create SSL structure');
+    LogSSLErrorDetailed(LOG_SSL_STRUCTURE_FAILED);
     Exit;
   end;
 
-  // Associate socket with SSL structure
   if FSSL_set_fd(SSL, Socket) <= 0 then
   begin
-    LogSSLErrorDetailed('Failed to associate socket with SSL');
+    LogSSLErrorDetailed(LOG_SSL_SET_FD_FAILED);
     FSSL_free(SSL);
     Exit;
   end;
 
-  // Store SSL object with socket
   SocketInfo.Socket := Socket;
   SocketInfo.SSL := SSL;
   FSSLSocketList.Add(SocketInfo);
@@ -761,14 +689,12 @@ begin
 
   if SSL = nil then
   begin
-    WriteLog(Format('Cannot perform handshake: No SSL object for socket %d', [Socket]));
+    WriteLog(Format(LOG_SSL_HANDSHAKE_NO_OBJECT, [Socket]));
     Exit;
   end;
 
-  // Temporarily set socket to blocking mode for SSL handshake
   SetSocketBlocking(Socket);
 
-  // Perform SSL handshake with retry logic
   RetryCount := 0;
   repeat
     RetVal := FSSL_accept(SSL);
@@ -776,42 +702,44 @@ begin
     begin
       SSLError := FSSL_get_error(SSL, RetVal);
 
-      // If we need to read or write more data, wait a bit and retry
       if (SSLError = SSL_ERROR_WANT_READ) or (SSLError = SSL_ERROR_WANT_WRITE) then
       begin
         Inc(RetryCount);
         if RetryCount <= MaxRetries then
         begin
-          WriteLog(Format('SSL handshake pending, retrying (%d/%d)...', [RetryCount, MaxRetries]));
-          Sleep(100); // Wait a bit before retrying
+          WriteLog(Format(LOG_SSL_HANDSHAKE_RETRY, [RetryCount, MaxRetries]));
+          Sleep(100);
           Continue;
         end;
       end;
 
-      WriteLog(Format('SSL handshake failed with SSL error code: %d', [SSLError]));
-      LogSSLErrorDetailed('SSL handshake failed');
+      WriteLog(Format(LOG_SSL_HANDSHAKE_FAILED, [SSLError]));
+      LogSSLErrorDetailed(LOG_SSL_HANDSHAKE_DETAILED);
       SetSocketNonBlocking(Socket);
       Exit;
     end;
 
-    // Success, break the loop
     Break;
   until RetryCount > MaxRetries;
 
-  // Set socket back to non-blocking mode
   SetSocketNonBlocking(Socket);
 
-  // Log successful handshake with protocol and cipher if available
-  if Assigned(FSSL_get_version) and Assigned(FSSL_get_cipher_name) then
+  WriteLog(LOG_SSL_HANDSHAKE_SUCCESS);
+
+  if Assigned(FSSL_get_version) then
   begin
     var Protocol: PAnsiChar := FSSL_get_version(SSL);
-    var Cipher: PAnsiChar := FSSL_get_cipher_name(SSL);
-    WriteLog(Format('SSL handshake successful. Protocol: %s, Cipher: %s',
-                   [string(Protocol), string(Cipher)]));
-  end
-  else
+    WriteLog(Format(LOG_PROTOCOL, [string(Protocol)]));
+  end;
+
+  if Assigned(FSSL_get_current_cipher) and Assigned(FSSL_CIPHER_get_name) then
   begin
-    WriteLog('SSL handshake successful');
+    var CurrentCipher := FSSL_get_current_cipher(SSL);
+    if CurrentCipher <> nil then
+    begin
+      var CipherName := FSSL_CIPHER_get_name(CurrentCipher);
+      WriteLog(Format(LOG_CIPHER, [string(CipherName)]));
+    end;
   end;
 
   Result := True;
@@ -827,7 +755,7 @@ begin
     FSSL_shutdown(SSL);
     FSSL_free(SSL);
     FSSLSocketList.RemoveBySocket(Socket);
-    WriteLog(Format('SSL connection for socket %d cleaned up', [Socket]));
+    WriteLog(Format(LOG_SSL_CONNECTION_CLEANUP, [Socket]));
   end;
 end;
 
@@ -848,9 +776,9 @@ begin
     if (Error = SSL_ERROR_WANT_READ) or (Error = SSL_ERROR_WANT_WRITE) then
       Result := 0
     else if Error = SSL_ERROR_ZERO_RETURN then
-      Result := 0  // Connection closed
+      Result := 0
     else
-      Result := -1; // Error
+      Result := -1;
   end;
 end;
 
@@ -871,7 +799,7 @@ begin
     if (Error = SSL_ERROR_WANT_READ) or (Error = SSL_ERROR_WANT_WRITE) then
       Result := 0
     else
-      Result := -1; // Error
+      Result := -1;
   end;
 end;
 
@@ -889,12 +817,20 @@ end;
 function TOpenSSLWrapper.GetSSLCipherName(Socket: TSocket): string;
 var
   SSL: PSSL;
+  Cipher: Pointer;
 begin
   Result := '';
   SSL := FSSLSocketList.GetSSL(Socket);
 
-  if (SSL <> nil) and Assigned(FSSL_get_cipher_name) then
-    Result := string(FSSL_get_cipher_name(SSL));
+  if SSL = nil then
+    Exit;
+
+  if Assigned(FSSL_get_current_cipher) and Assigned(FSSL_CIPHER_get_name) then
+  begin
+    Cipher := FSSL_get_current_cipher(SSL);
+    if Cipher <> nil then
+      Result := string(FSSL_CIPHER_get_name(Cipher));
+  end;
 end;
 
 end.

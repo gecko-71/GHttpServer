@@ -40,7 +40,8 @@ uses
   HTTPResponseBuilder in 'HTTPResponseBuilder.pas',
   HttpServerUtils in 'HttpServerUtils.pas',
   Logger in 'Logger.pas',
-  OpenSSLWrapper in 'OpenSSLWrapper.pas';
+  OpenSSLWrapper in 'OpenSSLWrapper.pas',
+  GHTTPConstants in 'GHTTPConstants.pas';
 
 var
   Server: TGHTTPSServer;
@@ -66,7 +67,7 @@ begin
           AResponseBuilder.SetStatus(200, 'OK');
           AResponseBuilder.AddTextContent('application/json', 'text/plain',
                                          '{"message":"Hello from HTTPS server!"}');
-        end);
+        end,atNone,[]);
 
       // Uruchom serwer
       Server.Start;

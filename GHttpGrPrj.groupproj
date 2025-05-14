@@ -15,6 +15,24 @@
         <Projects Include="GHttpsSvrPrj.dproj">
             <Dependencies/>
         </Projects>
+        <Projects Include="GRestSvrJWTPrj.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="GRestJWTClient.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="GHttpsRestSvrJWTPrj_1.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="GHttpsRestJWTClient_1.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="GHttpsRestSvrJWTPrj_2.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="GHttpsRestJWTClient_2.dproj">
+            <Dependencies/>
+        </Projects>
     </ItemGroup>
     <ProjectExtensions>
         <Borland.Personality>Default.Personality.12</Borland.Personality>
@@ -59,14 +77,68 @@
     <Target Name="GHttpsSvrPrj:Make">
         <MSBuild Projects="GHttpsSvrPrj.dproj" Targets="Make"/>
     </Target>
+    <Target Name="GRestSvrJWTPrj">
+        <MSBuild Projects="GRestSvrJWTPrj.dproj"/>
+    </Target>
+    <Target Name="GRestSvrJWTPrj:Clean">
+        <MSBuild Projects="GRestSvrJWTPrj.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="GRestSvrJWTPrj:Make">
+        <MSBuild Projects="GRestSvrJWTPrj.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="GRestJWTClient">
+        <MSBuild Projects="GRestJWTClient.dproj"/>
+    </Target>
+    <Target Name="GRestJWTClient:Clean">
+        <MSBuild Projects="GRestJWTClient.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="GRestJWTClient:Make">
+        <MSBuild Projects="GRestJWTClient.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="GHttpsRestSvrJWTPrj_1">
+        <MSBuild Projects="GHttpsRestSvrJWTPrj_1.dproj"/>
+    </Target>
+    <Target Name="GHttpsRestSvrJWTPrj_1:Clean">
+        <MSBuild Projects="GHttpsRestSvrJWTPrj_1.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="GHttpsRestSvrJWTPrj_1:Make">
+        <MSBuild Projects="GHttpsRestSvrJWTPrj_1.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="GHttpsRestJWTClient_1">
+        <MSBuild Projects="GHttpsRestJWTClient_1.dproj"/>
+    </Target>
+    <Target Name="GHttpsRestJWTClient_1:Clean">
+        <MSBuild Projects="GHttpsRestJWTClient_1.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="GHttpsRestJWTClient_1:Make">
+        <MSBuild Projects="GHttpsRestJWTClient_1.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="GHttpsRestSvrJWTPrj_2">
+        <MSBuild Projects="GHttpsRestSvrJWTPrj_2.dproj"/>
+    </Target>
+    <Target Name="GHttpsRestSvrJWTPrj_2:Clean">
+        <MSBuild Projects="GHttpsRestSvrJWTPrj_2.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="GHttpsRestSvrJWTPrj_2:Make">
+        <MSBuild Projects="GHttpsRestSvrJWTPrj_2.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="GHttpsRestJWTClient_2">
+        <MSBuild Projects="GHttpsRestJWTClient_2.dproj"/>
+    </Target>
+    <Target Name="GHttpsRestJWTClient_2:Clean">
+        <MSBuild Projects="GHttpsRestJWTClient_2.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="GHttpsRestJWTClient_2:Make">
+        <MSBuild Projects="GHttpsRestJWTClient_2.dproj" Targets="Make"/>
+    </Target>
     <Target Name="Build">
-        <CallTarget Targets="GHttpSvrPrj;GHttpSvrTestPrj;SSLCertGenerator;GHttpsSvrPrj"/>
+        <CallTarget Targets="GHttpSvrPrj;GHttpSvrTestPrj;SSLCertGenerator;GHttpsSvrPrj;GRestSvrJWTPrj;GRestJWTClient;GHttpsRestSvrJWTPrj_1;GHttpsRestJWTClient_1;GHttpsRestSvrJWTPrj_2;GHttpsRestJWTClient_2"/>
     </Target>
     <Target Name="Clean">
-        <CallTarget Targets="GHttpSvrPrj:Clean;GHttpSvrTestPrj:Clean;SSLCertGenerator:Clean;GHttpsSvrPrj:Clean"/>
+        <CallTarget Targets="GHttpSvrPrj:Clean;GHttpSvrTestPrj:Clean;SSLCertGenerator:Clean;GHttpsSvrPrj:Clean;GRestSvrJWTPrj:Clean;GRestJWTClient:Clean;GHttpsRestSvrJWTPrj_1:Clean;GHttpsRestJWTClient_1:Clean;GHttpsRestSvrJWTPrj_2:Clean;GHttpsRestJWTClient_2:Clean"/>
     </Target>
     <Target Name="Make">
-        <CallTarget Targets="GHttpSvrPrj:Make;GHttpSvrTestPrj:Make;SSLCertGenerator:Make;GHttpsSvrPrj:Make"/>
+        <CallTarget Targets="GHttpSvrPrj:Make;GHttpSvrTestPrj:Make;SSLCertGenerator:Make;GHttpsSvrPrj:Make;GRestSvrJWTPrj:Make;GRestJWTClient:Make;GHttpsRestSvrJWTPrj_1:Make;GHttpsRestJWTClient_1:Make;GHttpsRestSvrJWTPrj_2:Make;GHttpsRestJWTClient_2:Make"/>
     </Target>
     <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
 </Project>

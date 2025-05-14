@@ -80,30 +80,22 @@ type
   public
     constructor Create;
     destructor Destroy; override;
-    // Setting response status
     procedure SetStatus(AStatusCode: Integer; const AStatusText: string = '');
-    // Adding header
     procedure AddHeader(const AName, AValue: string);
     function GetHeader(const AName: string): string;
     procedure RemoveHeader(const AName: string);
-    // Adding Content
     function AddContent(const AName, AContentType: string): THTTPContentItem;
     function AddTextContent(const AName, AContentType, AContent: string; AEncoding: TEncoding = nil): THTTPContentItem;
     function AddBinaryContent(const AName, AContentType: string; const AData: TBytes): THTTPContentItem;
     function AddFileContent(const AName, AContentType, AFilename: string; const AData: TBytes): THTTPContentItem;
     function AddUploadedFile(const AName: string; const AFile: THTTPUploadedFile): THTTPContentItem;
-    // Removing content
     procedure ClearContent;
-    // Response status
     property StatusCode: Integer read FStatusCode write FStatusCode;
     property StatusText: string read FStatusText write FStatusText;
     property IsMultipart: Boolean read FIsMultipart write FIsMultipart;
     property Boundary: string read FBoundary;
-    // Conversion to TBytes
     function ToBytes: TBytes;
-    // Conversion to String
     function ToString: string; override;
-    // Helper methods for quickly creating standard responses
     class function CreateOkResponse(const AContentType: string; const AContent: string): THTTPResponseBuilder;
     class function CreateJsonResponse(const AContent: string): THTTPResponseBuilder;
     class function CreateNotFoundResponse: THTTPResponseBuilder;
@@ -112,6 +104,8 @@ type
   end;
 
 implementation
+
+uses GHTTPConstants;
 
 { THTTPUploadedFile }
 constructor THTTPUploadedFile.Create(const AFilename, AContentType: string; const AData: TBytes);
@@ -169,8 +163,7 @@ begin
   FContentItems := TObjectList<THTTPContentItem>.Create(True);
   FBoundary := GenerateRandomBoundary;
   FIsMultipart := False;
-  // Default headers
-  AddHeader('Server', 'Delphi HTTPServer/1.0');
+  AddHeader('Server', 'GHTTPServer/1.0');
   AddHeader('Connection', 'close');
   AddHeader('Date', FormatDateTime('ddd, dd mmm yyyy hh:nn:ss', Now) + ' GMT');
 end;
@@ -195,19 +188,18 @@ begin
   FStatusCode := AStatusCode;
   if AStatusText = '' then
   begin
-    // Standard HTTP statuses
     case AStatusCode of
-      200: FStatusText := 'OK';
-      201: FStatusText := 'Created';
-      204: FStatusText := 'No Content';
-      400: FStatusText := 'Bad Request';
-      401: FStatusText := 'Unauthorized';
-      403: FStatusText := 'Forbidden';
-      404: FStatusText := 'Not Found';
-      405: FStatusText := 'Method Not Allowed';
-      500: FStatusText := 'Internal Server Error';
+      HTTP_STATUS_OK: FStatusText := HTTP_MSG_OK;
+      HTTP_STATUS_CREATED: FStatusText := HTTP_MSG_CREATED;
+      HTTP_STATUS_NO_CONTENT: FStatusText := HTTP_MSG_NO_CONTENT;
+      HTTP_STATUS_BAD_REQUEST: FStatusText := HTTP_MSG_BAD_REQUEST;
+      HTTP_STATUS_UNAUTHORIZED: FStatusText := HTTP_MSG_UNAUTHORIZED;
+      HTTP_STATUS_FORBIDDEN: FStatusText := HTTP_MSG_FORBIDDEN;
+      HTTP_STATUS_NOT_FOUND: FStatusText := HTTP_MSG_NOT_FOUND;
+      HTTP_STATUS_METHOD_NOT_ALLOWED: FStatusText := HTTP_MSG_METHOD_NOT_ALLOWED;
+      HTTP_STATUS_INTERNAL_SERVER_ERROR: FStatusText := HTTP_MSG_INTERNAL_SERVER_ERROR;
     else
-      FStatusText := 'Unknown';
+      FStatusText := IP_VALUE_UNKNOWN;
     end;
   end
   else
@@ -234,7 +226,6 @@ function THTTPResponseBuilder.AddContent(const AName, AContentType: string): THT
 begin
   Result := THTTPContentItem.Create(AName, AContentType);
   FContentItems.Add(Result);
-  // If we have more than one element, automatically set multipart
   if FContentItems.Count > 1 then
     FIsMultipart := True;
 end;
@@ -280,14 +271,11 @@ function THTTPResponseBuilder.CalculateContentLength: Integer;
 begin
   if FIsMultipart then
   begin
-    // Calculating body length in multipart requires considering all parts,
-    // headers and boundaries
     var TempBytes := BuildMultipartBody;
     Result := Length(TempBytes);
   end
   else if FContentItems.Count > 0 then
   begin
-    // Check limit
     Result := Length(FContentItems[0].Data);
   end
   else
@@ -300,38 +288,30 @@ var
   HeaderStr: string;
   Key: string;
 begin
-  // Status line
   StatusLine := Format('HTTP/1.1 %d %s', [FStatusCode, FStatusText]);
-  // Headers
   HeaderStr := '';
   for Key in FHeaders.Keys do
     HeaderStr := HeaderStr + Format('%s: %s'#13#10, [Key, FHeaders[Key]]);
-  // If we have content, add appropriate headers
   if FContentItems.Count > 0 then
   begin
     if FIsMultipart then
     begin
-      // For multipart
       if not FHeaders.ContainsKey('Content-Type') then
         HeaderStr := HeaderStr + Format('Content-Type: multipart/mixed; boundary=%s'#13#10, [FBoundary]);
     end
     else
     begin
-      // For single part
       if not FHeaders.ContainsKey('Content-Type') then
         HeaderStr := HeaderStr + Format('Content-Type: %s'#13#10, [FContentItems[0].ContentType]);
     end;
-    // Add Content-Length
     if not FHeaders.ContainsKey('Content-Length') then
       HeaderStr := HeaderStr + Format('Content-Length: %d'#13#10, [CalculateContentLength]);
   end
   else
   begin
-    // If there is no content, set Content-Length: 0
     if not FHeaders.ContainsKey('Content-Length') then
       HeaderStr := HeaderStr + 'Content-Length: 0'#13#10;
   end;
-  // Combine everything
   Result := StatusLine + #13#10 + HeaderStr + #13#10;
 end;
 
@@ -345,20 +325,19 @@ end;
 
 function THTTPResponseBuilder.BuildSingleBodyAsString: string;
 begin
-  if (FContentItems.Count > 0) and (FContentItems[0].ContentType.Contains('text/') or
-      FContentItems[0].ContentType.Contains('application/json') or
-      FContentItems[0].ContentType.Contains('application/xml') or
-      FContentItems[0].ContentType.Contains('charset=')) then
+  if (FContentItems.Count > 0) and (FContentItems[0].ContentType.Contains(CONTENT_TYPE_TEXT_PREFIX) or
+      FContentItems[0].ContentType.Contains(MIME_TYPE_JSON) or
+      FContentItems[0].ContentType.Contains(MIME_TYPE_XML) or
+      FContentItems[0].ContentType.Contains(CONTENT_TYPE_CHARSET)) then
   begin
     Result := FContentItems[0].GetTextData;
   end
   else if FContentItems.Count > 0 then
   begin
-    // For binary data return information about its length
-    Result := Format('[Binary data, %d bytes]', [Length(FContentItems[0].Data)]);
+    Result := Format(BINARY_DATA_FORMAT, [Length(FContentItems[0].Data)]);
   end
   else
-    Result := '';
+    Result := EMPTY_STRING;
 end;
 
 function THTTPResponseBuilder.BuildMultipartBody: TBytes;
@@ -372,35 +351,38 @@ var
 begin
   MS := TMemoryStream.Create;
   try
-    BoundaryStart := '--' + FBoundary + #13#10;
-    BoundaryEnd := '--' + FBoundary + '--' + #13#10;
+    BoundaryStart := Format(BOUNDARY_START_FORMAT, [FBoundary]);
+    BoundaryEnd := Format(BOUNDARY_END_FORMAT, [FBoundary]);
+
     for Item in FContentItems do
     begin
-      // Beginning of part
       TempBytes := TEncoding.ASCII.GetBytes(BoundaryStart);
       MS.WriteBuffer(TempBytes[0], Length(TempBytes));
-      // Part headers
-      HeaderStr := Format('Content-Type: %s'#13#10, [Item.ContentType]);
-      if Item.Filename <> '' then
-        HeaderStr := HeaderStr + Format('Content-Disposition: attachment; filename="%s"'#13#10, [Item.Filename])
-      else if Item.Name <> '' then
-        HeaderStr := HeaderStr + Format('Content-Disposition: form-data; name="%s"'#13#10, [Item.Name]);
+
+      HeaderStr := Format(HEADER_CONTENT_TYPE_FORMAT, [Item.ContentType]);
+
+      if Item.Filename <> EMPTY_STRING then
+        HeaderStr := HeaderStr + Format(HEADER_CONTENT_DISPOSITION_ATTACHMENT, [Item.Filename])
+      else if Item.Name <> EMPTY_STRING then
+        HeaderStr := HeaderStr + Format(HEADER_CONTENT_DISPOSITION_FORM_DATA, [Item.Name]);
+
       for Key in Item.Headers.Keys do
-        HeaderStr := HeaderStr + Format('%s: %s'#13#10, [Key, Item.Headers[Key]]);
-      HeaderStr := HeaderStr + #13#10; // Empty line after headers
+        HeaderStr := HeaderStr + Format(HEADER_CUSTOM_FORMAT, [Key, Item.Headers[Key]]);
+
+      HeaderStr := HeaderStr + CRLF;
       TempBytes := TEncoding.ASCII.GetBytes(HeaderStr);
       MS.WriteBuffer(TempBytes[0], Length(TempBytes));
-      // Part data
+
       if Length(Item.Data) > 0 then
         MS.WriteBuffer(Item.Data[0], Length(Item.Data));
-      // New line after part
-      TempBytes := TEncoding.ASCII.GetBytes(#13#10);
+
+      TempBytes := TEncoding.ASCII.GetBytes(CRLF);
       MS.WriteBuffer(TempBytes[0], Length(TempBytes));
     end;
-    // Multipart ending
+
     TempBytes := TEncoding.ASCII.GetBytes(BoundaryEnd);
     MS.WriteBuffer(TempBytes[0], Length(TempBytes));
-    // Conversion to TBytes
+
     SetLength(Result, MS.Size);
     MS.Position := 0;
     MS.ReadBuffer(Result[0], MS.Size);
@@ -420,35 +402,39 @@ var
 begin
   SB := TStringBuilder.Create;
   try
-    BoundaryStart := '--' + FBoundary + #13#10;
-    BoundaryEnd := '--' + FBoundary + '--' + #13#10;
+    BoundaryStart := Format(BOUNDARY_START_FORMAT, [FBoundary]);
+    BoundaryEnd := Format(BOUNDARY_END_FORMAT, [FBoundary]);
+
     for Item in FContentItems do
     begin
-      // Beginning of part
       SB.Append(BoundaryStart);
-      // Part headers
-      HeaderStr := Format('Content-Type: %s'#13#10, [Item.ContentType]);
-      if Item.Filename <> '' then
-        HeaderStr := HeaderStr + Format('Content-Disposition: attachment; filename="%s"'#13#10, [Item.Filename])
-      else if Item.Name <> '' then
-        HeaderStr := HeaderStr + Format('Content-Disposition: form-data; name="%s"'#13#10, [Item.Name]);
+
+      HeaderStr := Format(HEADER_CONTENT_TYPE_FORMAT, [Item.ContentType]);
+
+      if Item.Filename <> EMPTY_STRING then
+        HeaderStr := HeaderStr + Format(HEADER_CONTENT_DISPOSITION_ATTACHMENT, [Item.Filename])
+      else if Item.Name <> EMPTY_STRING then
+        HeaderStr := HeaderStr + Format(HEADER_CONTENT_DISPOSITION_FORM_DATA, [Item.Name]);
+
       for Key in Item.Headers.Keys do
-        HeaderStr := HeaderStr + Format('%s: %s'#13#10, [Key, Item.Headers[Key]]);
-      HeaderStr := HeaderStr + #13#10; // Empty line after headers
+        HeaderStr := HeaderStr + Format(HEADER_CUSTOM_FORMAT, [Key, Item.Headers[Key]]);
+
+      HeaderStr := HeaderStr + CRLF;
       SB.Append(HeaderStr);
-      // Part data - check if it's textual data
-      IsTextual := Item.ContentType.Contains('text/') or
-                   Item.ContentType.Contains('application/json') or
-                   Item.ContentType.Contains('application/xml') or
-                   Item.ContentType.Contains('charset=');
+
+      IsTextual := Item.ContentType.Contains(CONTENT_TYPE_TEXT_PREFIX) or
+                   Item.ContentType.Contains(MIME_TYPE_JSON) or
+                   Item.ContentType.Contains(MIME_TYPE_XML) or
+                   Item.ContentType.Contains(CONTENT_TYPE_CHARSET);
+
       if IsTextual then
         SB.Append(Item.GetTextData)
       else
-        SB.AppendFormat('[Binary data, %d bytes]', [Length(Item.Data)]);
-      // New line after part
-      SB.Append(#13#10);
+        SB.AppendFormat(BINARY_DATA_FORMAT, [Length(Item.Data)]);
+
+      SB.Append(CRLF);
     end;
-    // Multipart ending
+
     SB.Append(BoundaryEnd);
     Result := SB.ToString;
   finally
@@ -461,16 +447,13 @@ var
   HeadersBytes, BodyBytes, ResultBytes: TBytes;
   HeadersLength, BodyLength: Integer;
 begin
-  // Generating header section
   HeadersBytes := TEncoding.ASCII.GetBytes(BuildHeadersSection);
   HeadersLength := Length(HeadersBytes);
-  // Generating body section
   if FIsMultipart then
     BodyBytes := BuildMultipartBody
   else
     BodyBytes := BuildSingleBody;
   BodyLength := Length(BodyBytes);
-  // Combining headers and body
   SetLength(ResultBytes, HeadersLength + BodyLength);
   if HeadersLength > 0 then
     Move(HeadersBytes[0], ResultBytes[0], HeadersLength);
@@ -484,9 +467,7 @@ var
   HeadersStr: string;
   BodyStr: string;
 begin
-  // Generating header section
   HeadersStr := BuildHeadersSection;
-  // Generating body section as string
   if FIsMultipart then
     BodyStr := BuildMultipartBodyAsString
   else
@@ -494,7 +475,6 @@ begin
   Result := HeadersStr + BodyStr;
 end;
 
-// Helper class methods for quickly creating standard responses
 class function THTTPResponseBuilder.CreateOkResponse(const AContentType: string;
   const AContent: string): THTTPResponseBuilder;
 begin
@@ -505,27 +485,28 @@ end;
 
 class function THTTPResponseBuilder.CreateJsonResponse(const AContent: string): THTTPResponseBuilder;
 begin
-  Result := CreateOkResponse('application/json; charset=utf-8', AContent);
+  Result := CreateOkResponse(MIME_TYPE_JSON_UTF8, AContent);
 end;
 
 class function THTTPResponseBuilder.CreateNotFoundResponse: THTTPResponseBuilder;
 begin
   Result := THTTPResponseBuilder.Create;
-  Result.SetStatus(404);
-  Result.AddTextContent('error', 'text/plain', 'Not Found');
+  Result.SetStatus(HTTP_STATUS_NOT_FOUND);
+  Result.AddTextContent(ERR_ERROR, MIME_TYPE_TEXT, HTTP_MSG_NOT_FOUND);
 end;
 
 class function THTTPResponseBuilder.CreateBadRequestResponse: THTTPResponseBuilder;
 begin
   Result := THTTPResponseBuilder.Create;
-  Result.SetStatus(400);
-  Result.AddTextContent('error', 'text/plain', 'Bad Request');
+  Result.SetStatus(HTTP_STATUS_BAD_REQUEST);
+  Result.AddTextContent(ERR_ERROR, MIME_TYPE_TEXT, HTTP_MSG_BAD_REQUEST);
 end;
 
 class function THTTPResponseBuilder.CreateInternalErrorResponse: THTTPResponseBuilder;
 begin
   Result := THTTPResponseBuilder.Create;
-  Result.SetStatus(500);
-  Result.AddTextContent('error', 'text/plain', 'Internal Server Error');
+  Result.SetStatus(HTTP_STATUS_INTERNAL_SERVER_ERROR);
+  Result.AddTextContent(ERR_ERROR, MIME_TYPE_TEXT, HTTP_MSG_INTERNAL_SERVER_ERROR);
 end;
+
 end.

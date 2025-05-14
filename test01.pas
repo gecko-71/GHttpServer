@@ -218,9 +218,9 @@ begin
     'User-Agent: ' + UserAgent + #13#10 +
     #13#10);
   if Pos('403 Forbidden', Response) > 0 then
-    AddTestResult('Suspicious User-Agent Test', 'PASS', 'Server correctly blocked suspicious User-Agent: ' + UserAgent)
+    AddTestResult('Suspicious User-Agent Test', 'PASS', 'Server correctly blocked suspicious User-Agent: ' + UserAgent + ' ' + Response )
   else if Response = '' then
-    AddTestResult('Suspicious User-Agent Test', 'FAIL', 'No response received')
+    AddTestResult('Suspicious User-Agent Test', 'FAIL', 'No response received ' + Response)
   else
     AddTestResult('Suspicious User-Agent Test', 'FAIL', 'Unexpected response: ' + Copy(Response, 1, 100) + '...');
 end;
@@ -384,7 +384,9 @@ begin
 
   AddTestResult('GET Performance Test', 'PASS',
     Format('%d GET requests completed in %d ms (avg %d ms per request)',
-    [SuccessCount, TotalTime, TotalTime div RequestsCount]));
+    [SuccessCount, TotalTime, Integer(TotalTime) div Integer(RequestsCount)   ]));
+
+
 
   StartTime := GetTickCount;
   for i := 1 to 5 do
@@ -677,7 +679,6 @@ procedure TfrmHTTPTester.RunPOSTTest;
 var
   Host: string;
   Port: Integer;
-  Response: string;
   PostData: string;
   ClientSocket: TSocket;
   Addr: TSockAddrIn;

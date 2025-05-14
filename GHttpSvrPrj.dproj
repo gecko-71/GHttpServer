@@ -96,6 +96,7 @@
         <DCCReference Include="GHTTP.pas"/>
         <DCCReference Include="HTTPRequest.pas"/>
         <DCCReference Include="HTTPResponseBuilder.pas"/>
+        <DCCReference Include="GHTTPConstants.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

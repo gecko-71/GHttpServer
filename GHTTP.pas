@@ -112,28 +112,27 @@ begin
       Server.AddEndpointProc('/', 'GET',
         procedure(Sender: TObject; ARequestParser: THTTPRequestParser;
                             AResponseBuilder: THTTPResponseBuilder;
-                            ASerwer:TGHTTPServer)
+                            AServer:TGHTTPServer)
         begin
             AResponseBuilder.SetStatus(200);
             AResponseBuilder.AddTextContent('content', 'text/html; charset=utf-8',
               '<html><body><h1>Welcome to the server</h1></body></html>');
-        end);
+        end,atNone,[]);
       //=====================================================================
       Server.AddEndpointProc('/redirect', 'GET',
           procedure(Sender: TObject;ARequestParser: THTTPRequestParser;
                             AResponseBuilder: THTTPResponseBuilder;
-                            ASerwer:TGHTTPServer)
+                            AServer:TGHTTPServer)
           begin
             AResponseBuilder.SetStatus(302);
             AResponseBuilder.AddTextContent('content', 'text/html; charset=utf-8','');
-          end);
+          end,atNone,[]);
       //=====================================================================
       Server.AddEndpointProc('/echo', 'GET',
         procedure(Sender: TObject; ARequestParser: THTTPRequestParser;
                             AResponseBuilder: THTTPResponseBuilder;
-                            ASerwer:TGHTTPServer)
+                            AServer:TGHTTPServer)
         var
-          i: Integer;
           Pair: TPair<string, string>;
         begin
           var ResponseStr: String := '<html><body><h1>Echo Parameters</h1><ul>';
@@ -147,28 +146,27 @@ begin
           ResponseStr := ResponseStr + '</ul></body></html>';
           AResponseBuilder.SetStatus(200);
           AResponseBuilder.AddTextContent('content', 'text/html; charset=utf-8', ResponseStr);
-        end);
+        end,atNone,[]);
       //=====================================================================
       Server.AddEndpointProc('/TestCase', 'GET',
         procedure(Sender: TObject; ARequestParser: THTTPRequestParser;
                             AResponseBuilder: THTTPResponseBuilder;
-                            ASerwer:TGHTTPServer)
+                            AServer:TGHTTPServer)
         begin
           var ResponseStr: String :=
             '<html><body><h1>Hello from TestCase!</h1>' +
-            '<p>Active connections: ' + IntToStr(ASerwer.GetActiveConnections) + '</p>' +
+            '<p>Active connections: ' + IntToStr(AServer.GetActiveConnections) + '</p>' +
             '<p>Method: GET</p>' +
             '</body></html>';
           AResponseBuilder.SetStatus(200);
           AResponseBuilder.AddTextContent('content', 'text/html; charset=utf-8', ResponseStr);
-        end);
+        end,atNone,[]);
       //=====================================================================
       Server.AddEndpointProc('/post-test', 'POST',
         procedure(Sender: TObject; ARequestParser: THTTPRequestParser;
                             AResponseBuilder: THTTPResponseBuilder;
-                            ASerwer:TGHTTPServer)
+                            AServer:TGHTTPServer)
         var
-          i: Integer;
           Pair: TPair<string, string>;
         begin
           var ResponseStr: String := '<html><body><h1>POST Test</h1>';
@@ -185,12 +183,12 @@ begin
           ResponseStr := ResponseStr + '</body></html>';
           AResponseBuilder.SetStatus(200);
           AResponseBuilder.AddTextContent('content', 'text/html; charset=utf-8', ResponseStr);
-        end);
+        end,atNone,[]);
       //=====================================================================
       Server.AddEndpointProc('/post-test', 'GET',
         procedure(Sender: TObject; ARequestParser: THTTPRequestParser;
                             AResponseBuilder: THTTPResponseBuilder;
-                            ASerwer:TGHTTPServer)
+                            AServer:TGHTTPServer)
         begin
           var ResponseStr: string  := '<html><body><h1>POST Test - Method Not Allowed</h1>';
           ResponseStr := ResponseStr + '<p>Please use POST method</p>';
@@ -201,12 +199,12 @@ begin
           ResponseStr := ResponseStr + '</form></body></html>';
           AResponseBuilder.SetStatus(405);
           AResponseBuilder.AddTextContent('content', 'text/html; charset=utf-8', ResponseStr);
-        end);
+        end,atNone,[]);
       //=====================================================================
     Server.AddEndpointProc('/download', 'GET',
       procedure(Sender: TObject; ARequestParser: THTTPRequestParser;
                           AResponseBuilder: THTTPResponseBuilder;
-                           ASerwer: TGHTTPServer)
+                           AServer: TGHTTPServer)
       var
         FileName: string;
         FilePath: string;
@@ -234,9 +232,9 @@ begin
           Exit;
         end;
 
-        FilePath := ASerwer.BaseDirectory + FileName;
+        FilePath := AServer.BaseDirectory + FileName;
 
-        if not FileExists(FilePath) then
+        if not TFile.Exists(FilePath) then
         begin
           Response := '<html><body><h1>404 Not Found</h1><p>File not found</p></body></html>';
           AResponseBuilder.SetStatus(404);
@@ -253,7 +251,7 @@ begin
               FileStream.ReadBuffer(FileData[0], FileSize);
 
             FileExt := LowerCase(ExtractFileExt(FileName));
-            ContentType := ASerwer.GetMimeTypeFromFileExt(FileExt);
+            ContentType := AServer.GetMimeType(FileExt);
 
             AResponseBuilder.SetStatus(200);
             AResponseBuilder.AddHeader('Content-Disposition', 'attachment; filename="' + FileName + '"');
@@ -269,13 +267,13 @@ begin
             AResponseBuilder.AddTextContent('content', 'text/html; charset=utf-8', Response);
           end;
         end;
-      end);
+      end,atNone,[]);
 
       //=====================================================================
       Server.AddEndpointProc('/files', 'GET',
         procedure(Sender: TObject; ARequestParser: THTTPRequestParser;
                             AResponseBuilder: THTTPResponseBuilder;
-                            ASerwer:TGHTTPServer)
+                            AServer:TGHTTPServer)
         var
           SR: TSearchRec;
           Files: TStringList;
@@ -283,7 +281,7 @@ begin
         begin
           Files := TStringList.Create;
           try
-            if FindFirst(ASerwer.BaseDirectory + '*.*', faAnyFile, SR) = 0 then
+            if FindFirst(AServer.BaseDirectory + '*.*', faAnyFile, SR) = 0 then
             begin
               repeat
                 if (SR.Name <> '.') and (SR.Name <> '..') and ((SR.Attr and faDirectory) = 0) then
@@ -302,7 +300,7 @@ begin
           finally
             Files.Free;
           end;
-        end);
+        end,atNone,[]);
       //=====================================================================
        Server.AddEndpointProc('/sendfile', 'GET',
             procedure(Sender: TObject; ARequestParser: THTTPRequestParser;
@@ -311,8 +309,7 @@ begin
             begin
               AResponseBuilder.SetStatus(200);
               AResponseBuilder.AddTextContent('content', 'text/html; charset=utf-8', htmlstat);
-            end
-          );
+            end ,atNone,[]);
       //=====================================================================
       Server.AddEndpointProc('/upload', 'POST',
       procedure(Sender: TObject; ARequestParser: THTTPRequestParser;
@@ -371,7 +368,7 @@ begin
         end;
 
         try
-          TargetDir := AServer.BaseDirectory + 'uploads\';
+          TargetDir :=  AServer.BaseDirectory + 'uploads\';
 
           if not DirectoryExists(TargetDir) then
             ForceDirectories(TargetDir);
@@ -453,13 +450,13 @@ begin
             AResponseBuilder.AddTextContent('content', 'text/html; charset=utf-8', ResponseHtml);
           end;
         end;
-      end);
+      end,atNone,[]);
 
       //=====================================================================
   Server.AddEndpointProc('/form-test', 'POST',
     procedure(Sender: TObject; ARequestParser: THTTPRequestParser;
                       AResponseBuilder: THTTPResponseBuilder;
-                      ASerwer:TGHTTPServer)
+                      AServer:TGHTTPServer)
     var
       Pair: TPair<string, string>;
     begin
@@ -491,13 +488,13 @@ begin
 
       ResponseStr := ResponseStr + '</body></html>';
       AResponseBuilder.AddTextContent('content', 'text/html; charset=utf-8', ResponseStr);
-    end);
+    end,atNone,[]);
 
   //=====================================================================
   Server.AddEndpointProc('/multipart-test', 'POST',
     procedure(Sender: TObject; ARequestParser: THTTPRequestParser;
                     AResponseBuilder: THTTPResponseBuilder;
-                    ASerwer:TGHTTPServer)
+                    AServer:TGHTTPServer)
     var
       UploadedFile: THTTPMultipartFile;
       Pair: TPair<string, string>;
@@ -549,7 +546,7 @@ begin
 
       ResponseStr := ResponseStr + '</body></html>';
       AResponseBuilder.AddTextContent('content', 'text/html; charset=utf-8', ResponseStr);
-    end);
+    end,atNone,[]);
 
       Server.Start;
     finally

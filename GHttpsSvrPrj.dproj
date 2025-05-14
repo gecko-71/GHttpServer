@@ -91,6 +91,7 @@
         <DCCReference Include="HttpServerUtils.pas"/>
         <DCCReference Include="Logger.pas"/>
         <DCCReference Include="OpenSSLWrapper.pas"/>
+        <DCCReference Include="GHTTPConstants.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

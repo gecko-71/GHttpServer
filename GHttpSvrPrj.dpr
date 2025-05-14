@@ -39,7 +39,8 @@ uses
   Logger in 'Logger.pas',
   GHTTP in 'GHTTP.pas',
   HTTPRequest in 'HTTPRequest.pas',
-  HTTPResponseBuilder in 'HTTPResponseBuilder.pas';
+  HTTPResponseBuilder in 'HTTPResponseBuilder.pas',
+  GHTTPConstants in 'GHTTPConstants.pas';
 
 var
   GHTTP: TGHTTP;
