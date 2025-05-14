@@ -57,10 +57,8 @@ type
     TimeoutValue: Double;
   end;
 
-  // JWT Authorization types
   TAuthorizationType = (atNone, atJWTBearer);
 
-  // JWT Token Structure
   TJWTToken = record
     Header: string;
     Payload: string;
@@ -74,7 +72,6 @@ type
     function GetClaim(const Name: string): string;
   end;
 
-  // JWT Authentication Manager
   TJWTManager = class
   private
     FSecretKey: string;
@@ -92,7 +89,6 @@ type
 
   TGHTTPServer = class;
 
-  // Event types for endpoints
   TEndpointEvent = procedure(Sender: TObject;
                         ARequestParser: THTTPRequestParser;
                         AResponseBuilder: THTTPResponseBuilder;
@@ -101,7 +97,6 @@ type
                         ARequestParser: THTTPRequestParser;
                         AResponseBuilder: THTTPResponseBuilder; ASerwer:TGHTTPServer) ;
 
-  // Endpoint item
   TEndpointItem = class(TCollectionItem)
   private
     FEndpoint: string;
@@ -126,7 +121,6 @@ type
     property Roles: TStringList read FRoles;
   end;
 
-  // Endpoint collection
   TEndpointCollection = class(TCollection)
   private
     FOwner: TGHTTPServer;
@@ -229,7 +223,6 @@ type
     property JWTManager: TJWTManager read FJWTManager;
   end;
 
-  // Helper functions
   function FindBytes(const Haystack, Needle: TBytes; StartPos: Integer = 0): Integer;
   function FindHeaderEnd(const Data: TBytes; StartPos, EndPos: Integer): Integer;
   function AppendBytes(const Source: TBytes; Buffer: Pointer; BytesCount: Integer): TBytes;

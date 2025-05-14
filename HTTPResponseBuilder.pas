@@ -30,7 +30,6 @@ uses
   System.Hash, IdGlobalProtocols;
 
 type
-  // Class for building responses
   THTTPUploadedFile = class
   private
     FFilename: string;

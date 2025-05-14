@@ -161,7 +161,7 @@ begin
   FCleanupInterval := C_DEFAULT_CLEANUP_INTERVAL;        // Cleanup every 3 minutes
   FMaxIPRecords := C_DEFAULT_MAX_IP_RECORDS;       // Maximum 10 thousand IP records
   FLastCleanupTime := Now;
-  // Run cyclical cleanup task
+  
   TTask.Run(procedure
   begin
     while not TThread.CurrentThread.CheckTerminated do
@@ -197,7 +197,6 @@ begin
   try
     if not FIPDict.TryGetValue(IP, IPStats) then
     begin
-      // Checks record limit
       if FIPDict.Count >= FMaxIPRecords then
       begin
         Log(Format(C_REGISTER_REQUEST_MAX_RECORDS, [IP, FMaxIPRecords]));
@@ -209,23 +208,19 @@ begin
       Log(Format(C_REGISTER_REQUEST_NEW_IP, [IP]));
       Exit;
     end;
-    // Checks if IP is blocked
     if CurrentTime < IPStats.BlockedUntil then
     begin
       Log(Format(C_REGISTER_REQUEST_BLOCKED, [IP, DateTimeToStr(IPStats.BlockedUntil)]));
       Result := False;
       Exit;
     end;
-    // Reset counter
     if MinutesBetween(CurrentTime, IPStats.LastRequestTime) >= 1 then
     begin
       IPStats.RequestCount := 0;
       Log(Format(C_REGISTER_REQUEST_RESET_COUNT, [IP]));
     end;
-    // Increase counter
     Inc(IPStats.RequestCount);
     IPStats.LastRequestTime := CurrentTime;
-    // Check limit
     if IPStats.RequestCount > FMaxRequestsPerMinute then
     begin
       IPStats.BlockedUntil := CurrentTime + (FBlockTime / 1440);
